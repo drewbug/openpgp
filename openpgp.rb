@@ -2,11 +2,9 @@
 # (C) Stephan Beyer <s-beyer@gmx.net>, 2005, GPL
 # THIS IS NOT A FINAL RELEASE, JUST A PREVIEW, UPDATED IRREGULARLY.
 # DON'T USE IT!
-# MANY FUNCTIONS/CLASSES/MODULES ARE PROVISIONAL! I will not accept patches at this
-# early state but you may send comments or questions about this project. The 
-# design may (will!) change. Type system is inconsistent to see what solution
-# fits best. Documentation will follow. (Inofficial) Debian packages will follow 
-# when the first release is ready. 
+# MANY FUNCTIONS/CLASSES/MODULES ARE PROVISIONAL!
+# The design may (will?) change. Type system is inconsistent to see what solution
+# fits best. Documentation should follow.
 
 # ATM This module only implements _read-only functions_ for handling OpenPGP
 # data.
@@ -446,7 +444,7 @@ class SigV4SubPacket
 		@type = type
 		@value = case type
 		when Created, Expires, KeyExpires
-			raise "Signature sub packet (#{typename})  is no timestamp!" if data.length != 4
+			raise "Signature sub packet (#{typename}) is no timestamp!" if data.length != 4
 			Time.at(scalar(data))
 		when Exportable, Revocable, Primary
 			raise "Signature sub packet (#{typename}) is no boolean!" if data.length != 1
@@ -686,9 +684,9 @@ class PubKeyPacket < Packet
 		(@body[0] == 2 ? 3 : @body[0])
 	end
 
-	# two predicate versions, not checking for values != 3 and != 4
+	# two predicate versions, not checking for other values
 	def version3?
-		@body[0] == 3
+		(@body[0] == 3 || @body[0] == 2)
 	end
 
 	def version4?
@@ -848,22 +846,23 @@ public
 		pos=0
 		partial=false # partial stuff not yet tested!
 
-		while pos < @ring.length # used @ringor debugging only
+		while pos < @ring.length # used @ring for debugging only
 			if (@ring[pos] >> 7).nonzero? # aka is_pkthdr (packet header)
 				bodylen = 0
 				
-				if ((@ring[pos] >> 6) & 1).zero? # aka is_old@ringormat
+				if ((@ring[pos] >> 6) & 1).zero? # aka is_oldformat
 					partial=false
 					type = (@ring[pos] & 0b111100) >> 2
 					lengthtype = (@ring[pos] & 0b11)
 					if lengthtype < 3
-						(1 << lengthtype).downto(1) do |len|
+						(lengthtype+1).times do
 							pos += 1
 							bodylen <<= 8
 							bodylen |= @ring[pos] 
 						end
 					else
-						raise 'OpenPGP Old @ringormat Length Type 3 not supported!'
+						#raise 'OpenPGP Old Format Length Type 3 not supported!'
+						bodylen = @ring.length
 					end
 					pos+=1
 				else
@@ -939,7 +938,7 @@ ring.each_packet do |pkt|
 	pkt = pkt.inherit
 	
 	case pkt.ptype
-	when Packet::PubKey, Packet::PubSubKey
+	when Packet::PubKey, Packet::PubSubKey, Packet::SecKey, Packet::SecSubKey
 		puts " -> version #{pkt.version}, algo #{pkt.algorithm} (#{PubKeyAlgo.name(pkt.algorithm)}), created #{pkt.ctime}, expires #{pkt.expires}"
 		puts " -> #{pkt.algvalues.join " "}"
 	when Packet::UserId
