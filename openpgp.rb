@@ -208,8 +208,10 @@ public
 		case @ptype
 		when UserId
 			UserIdPacket.new(@body)
-		when PubKey, PubSubKey, SecKey, SecSubKey
+		when PubKey, PubSubKey
 			PubKeyPacket.new(@body, @ptype)
+		when SecKey, SecSubKey
+			SecKeyPacket.new(@body)
 		when Attribute
 			UserAttributePacket.new(@body)
 		when Signature
@@ -722,7 +724,7 @@ class PubKeyPacket < Packet
 		
 		case algorithm
 		# TODO return Structs/Classes/Hashes, not Arrays
-		when *PubKeyAlgo::RSA
+		when PubKeyAlgo::RSA
 			modulus, offset = *mpi(@body, offset)
 			exponent = mpi(@body, offset)[0]
 			###exponent = mpi(@body.end(offset)) is another variant
@@ -733,7 +735,7 @@ class PubKeyPacket < Packet
 			groupgen, offset = *mpi(@body, offset)
 			value = mpi(@body, offset)[0]
 			[:dsa, prime, groupord, groupgen, value]
-		when *PubKeyAlgo::Elgamal
+		when PubKeyAlgo::Elgamal
 			prime, offset = *mpi(@body, offset)
 			groupgen, offset = *mpi(@body, offset)
 			value = mpi(@body, offset)[0]
@@ -749,9 +751,35 @@ class PubSubKeyPacket < PubKeyPacket
 end
 
 class SecKeyPacket < PubKeyPacket
+private
+	@offset = 0
+public
 	def initialize(data)
 		super(data, SecKey)
+		
+		# irgendwie mit algvalues() von PubKey mergen
+		@offset = 6
+		@offset += 2 if version3?
+
+		case algorithm
+		when PubKeyAlgo::RSA
+			@offset = mpi(@body, @offset)[1]
+			@offset = mpi(@body, @offset)[1]
+		when PubKeyAlgo::DSA
+			@offset = mpi(@body, @offset)[1]
+			@offset = mpi(@body, @offset)[1]
+			@offset = mpi(@body, @offset)[1]
+		when PubKeyAlgo::Elgamal
+			@offset = mpi(@body, @offset)[1]
+			@offset = mpi(@body, @offset)[1]
+		end
 	end
+
+	def s2kval
+		@body[@offset]
+	end
+
+	# TODO 5.5.3 in stilltoimplement.txt
 end
 
 class SecSubKeyPacket < PubKeyPacket
@@ -938,9 +966,13 @@ ring.each_packet do |pkt|
 	pkt = pkt.inherit
 	
 	case pkt.ptype
-	when Packet::PubKey, Packet::PubSubKey, Packet::SecKey, Packet::SecSubKey
+	when Packet::PubKey, Packet::PubSubKey
 		puts " -> version #{pkt.version}, algo #{pkt.algorithm} (#{PubKeyAlgo.name(pkt.algorithm)}), created #{pkt.ctime}, expires #{pkt.expires}"
 		puts " -> #{pkt.algvalues.join " "}"
+	when Packet::SecKey, Packet::SecSubKey
+		puts " -> version #{pkt.version}, algo #{pkt.algorithm} (#{PubKeyAlgo.name(pkt.algorithm)}), created #{pkt.ctime}, expires #{pkt.expires}"
+		puts " -> #{pkt.algvalues.join " "}"
+		puts " -> s2k #{pkt.s2kval}"
 	when Packet::UserId
 		puts ' -> '+pkt.uid
 	when Packet::Attribute
