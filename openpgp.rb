@@ -1,10 +1,11 @@
-#!/usr/bin/ruby
 # (C) Stephan Beyer <s-beyer@gmx.net>, 2005, GPL
 # THIS IS NOT A FINAL RELEASE, JUST A PREVIEW, UPDATED IRREGULARLY.
 # DON'T USE IT!
-# MANY FUNCTIONS/CLASSES/MODULES ARE PROVISIONAL!
-# The design may (will?) change. Type system is inconsistent to see what solution
-# fits best. Documentation should follow.
+# MANY FUNCTIONS/CLASSES/MODULES ARE PROVISIONAL! I will not accept patches at this
+# early state but you may send comments or questions about this project. The 
+# design may (will!) change. Type system is inconsistent to see what solution
+# fits best. Documentation will follow. (Inofficial) Debian packages will follow 
+# when the first release is ready. 
 
 # ATM This module only implements _read-only functions_ for handling OpenPGP
 # data.
@@ -80,10 +81,11 @@ end
 # value, not a new position
 def mpi(str, offset=nil)
 	pos = (offset.nil? ? 0 : offset)
-	##print "MPI: pos #{pos} "
+	#$stderr.print "MPI: pos #{pos} "
+	#$stderr.print scalar(str[pos,2])
 	len = (scalar(str[pos,2]) / 8.0).ceil
 	pos += 2
-	##print "\t\tlen #{len}\tnewpos #{pos+len}\n"
+	#$stderr.print "\t\tlen #{len}\tnewpos #{pos+len}\n"
 	ret = scalar(str[pos,len])
 	if offset.nil?
 		ret
@@ -208,10 +210,8 @@ public
 		case @ptype
 		when UserId
 			UserIdPacket.new(@body)
-		when PubKey, PubSubKey
+		when PubKey, PubSubKey, SecKey, SecSubKey
 			PubKeyPacket.new(@body, @ptype)
-		when SecKey, SecSubKey
-			SecKeyPacket.new(@body)
 		when Attribute
 			UserAttributePacket.new(@body)
 		when Signature
@@ -304,15 +304,21 @@ end
 # check version and inherit to V3 or V4 packet
 module SignaturePacket
 	def algvalues_mixin(pos)
-		case pubkeyalgo
-		when PubKeyAlgo::RSA
-			{ :algo => pubkeyalgo,
-			  :s => mpi(@body.end(pos)) }
-		when PubKeyAlgo::DSA
-			r, pos = *mpi(@body, pos)
-			{ :algo => pubkeyalgo,
-			  :r => r,
-			  :s => mpi(@body, pos)[0] }
+		begin
+			case pubkeyalgo
+			when PubKeyAlgo::RSA
+				{ :algo => pubkeyalgo,
+				  :s => mpi(@body.end(pos)) }
+			when PubKeyAlgo::DSA
+				r, pos = *mpi(@body, pos)
+				{ :algo => pubkeyalgo,
+				  :r => r,
+				  :s => mpi(@body, pos)[0] }
+			else # unknown algo
+				{}
+			end
+		rescue
+			raise "Broken algorithm values or bug!"
 		end
 	end
 
@@ -320,12 +326,14 @@ module SignaturePacket
 		#print "SignaturePacket.new: "
 		#p data.end(1).unpack('H*')
 		case data[0]
-		when 2, 3
+		when 2
+			SignatureV2Packet.new(data.end(1))
+		when 3
 			SignatureV3Packet.new(data.end(1))
 		when 4
 			SignatureV4Packet.new(data.end(1))
 		else
-			raise 'Signature Version != 3 and != 4 not supported'
+			raise "Signature Version #{data[0]} != 2, 3 or 4 not supported!"
 		end
 	end
 end
@@ -367,6 +375,12 @@ class SignatureV3Packet < Packet
 
 	def algvalues
 		algvalues_mixin(18)
+	end
+end
+
+class SignatureV2Packet < SignatureV3Packet
+	def version
+		2
 	end
 end
 
@@ -446,7 +460,7 @@ class SigV4SubPacket
 		@type = type
 		@value = case type
 		when Created, Expires, KeyExpires
-			raise "Signature sub packet (#{typename}) is no timestamp!" if data.length != 4
+			raise "Signature sub packet (#{typename})  is no timestamp!" if data.length != 4
 			Time.at(scalar(data))
 		when Exportable, Revocable, Primary
 			raise "Signature sub packet (#{typename}) is no boolean!" if data.length != 1
@@ -680,17 +694,18 @@ class PubKeyPacket < Packet
 	end
 
 	# checks if version is supported
-	# 2 is returned as 3
 	def version
 		raise 'Invalid packet version!' unless @body[0].between?(2,4)
-		(@body[0] == 2 ? 3 : @body[0])
+		@body[0]
 	end
 
-	# two predicate versions, not checking for other values
+	# two predicate versions, not checking for values \notin {2,3,4}
+	def version2?
+		@body[0] == 2
+	end
 	def version3?
-		(@body[0] == 3 || @body[0] == 2)
+		@body[0] == 3
 	end
-
 	def version4?
 		@body[0] == 4
 	end
@@ -704,8 +719,8 @@ class PubKeyPacket < Packet
 		case version
 		when 4
 			0 # public keys don't expire?
-		when 3
-			scalar(@body[5,2])
+		when 2, 3
+			Time.at(ctime+86400*scalar(@body[5,2]))
 		end
 	end
 
@@ -713,18 +728,18 @@ class PubKeyPacket < Packet
 		case version
 		when 4
 			@body[5]
-		when 3
+		when 2, 3
 			@body[7]
 		end
 	end
 
 	def algvalues
 		offset = 6
-		offset += 2 if version3?
+		offset += 2 if version3? or version2?
 		
 		case algorithm
 		# TODO return Structs/Classes/Hashes, not Arrays
-		when PubKeyAlgo::RSA
+		when *PubKeyAlgo::RSA
 			modulus, offset = *mpi(@body, offset)
 			exponent = mpi(@body, offset)[0]
 			###exponent = mpi(@body.end(offset)) is another variant
@@ -735,11 +750,13 @@ class PubKeyPacket < Packet
 			groupgen, offset = *mpi(@body, offset)
 			value = mpi(@body, offset)[0]
 			[:dsa, prime, groupord, groupgen, value]
-		when PubKeyAlgo::Elgamal
+		when *PubKeyAlgo::Elgamal
 			prime, offset = *mpi(@body, offset)
 			groupgen, offset = *mpi(@body, offset)
 			value = mpi(@body, offset)[0]
 			[:elgamal, prime, groupgen, value]
+		else
+			[:unknown]
 		end
 	end
 end
@@ -751,35 +768,9 @@ class PubSubKeyPacket < PubKeyPacket
 end
 
 class SecKeyPacket < PubKeyPacket
-private
-	@offset = 0
-public
 	def initialize(data)
 		super(data, SecKey)
-		
-		# irgendwie mit algvalues() von PubKey mergen
-		@offset = 6
-		@offset += 2 if version3?
-
-		case algorithm
-		when PubKeyAlgo::RSA
-			@offset = mpi(@body, @offset)[1]
-			@offset = mpi(@body, @offset)[1]
-		when PubKeyAlgo::DSA
-			@offset = mpi(@body, @offset)[1]
-			@offset = mpi(@body, @offset)[1]
-			@offset = mpi(@body, @offset)[1]
-		when PubKeyAlgo::Elgamal
-			@offset = mpi(@body, @offset)[1]
-			@offset = mpi(@body, @offset)[1]
-		end
 	end
-
-	def s2kval
-		@body[@offset]
-	end
-
-	# TODO 5.5.3 in stilltoimplement.txt
 end
 
 class SecSubKeyPacket < PubKeyPacket
@@ -878,19 +869,18 @@ public
 			if (@ring[pos] >> 7).nonzero? # aka is_pkthdr (packet header)
 				bodylen = 0
 				
-				if ((@ring[pos] >> 6) & 1).zero? # aka is_oldformat
+				if ((@ring[pos] >> 6) & 1).zero? # aka is_old_ring_format?
 					partial=false
 					type = (@ring[pos] & 0b111100) >> 2
 					lengthtype = (@ring[pos] & 0b11)
 					if lengthtype < 3
-						(lengthtype+1).times do
+						(1 << lengthtype).downto(1) do |len|
 							pos += 1
 							bodylen <<= 8
 							bodylen |= @ring[pos] 
 						end
 					else
-						#raise 'OpenPGP Old Format Length Type 3 not supported!'
-						bodylen = @ring.length
+						raise 'OpenPGP Old ring format Length Type 3 not supported!'
 					end
 					pos+=1
 				else
@@ -901,7 +891,7 @@ public
 				raise 'Invalid packet!'
 			end
 
-			ret = yield Packet.new(@ring[pos,bodylen], type)
+			ret = yield Packet.new(@ring[pos,bodylen], type), pos
 #			unless readonly
 #				@ring[pos,bodylen] = ret
 #				# TODO
@@ -913,101 +903,4 @@ public
 			pos += bodylen
 		end
 	end
-end
-
-
-## Now the test program follows:
-##
-##
-##
-##
-##
-def printsubpacket(sub)
-	print "       # len #{sub.length}, #{sub.typename}: "
-	case sub.type
-	when SigV4SubPacket::PrefCompression
-		sub.value.each do |i|
-			print "#{CompressionAlgo.name(i)} "
-		end
-		puts
-	when SigV4SubPacket::PrefHash
-		sub.value.each do |i|
-			print "#{HashAlgo.name(i)} "
-		end
-		puts
-	when SigV4SubPacket::PrefSymmetric
-		sub.value.each do |i|
-			print "\"#{SymmetricAlgo.name(i)}\" "
-		end
-		puts
-	when SigV4SubPacket::Issuer
-		puts "0x#{sub.value.upcase}"
-	when SigV4SubPacket::Flags, SigV4SubPacket::Features,
-	     SigV4SubPacket::KeyServerOptions 
-		sub.value.each do |n,v|
-			print "#{n} "if v
-		end
-		puts
-	else
-		p sub.value
-	end
-end
-
-ring = PacketComposition.fileread('testfile')
-if ring.armored
-	puts "Armor type: #{ring.armortype}"
-	print 'Armor header: '
-	p ring.armorheader
-end
-
-ring.each_packet do |pkt|
- begin
-	puts "#{pkt.typename}, length #{pkt.length}\n"
-	pkt = pkt.inherit
-	
-	case pkt.ptype
-	when Packet::PubKey, Packet::PubSubKey
-		puts " -> version #{pkt.version}, algo #{pkt.algorithm} (#{PubKeyAlgo.name(pkt.algorithm)}), created #{pkt.ctime}, expires #{pkt.expires}"
-		puts " -> #{pkt.algvalues.join " "}"
-	when Packet::SecKey, Packet::SecSubKey
-		puts " -> version #{pkt.version}, algo #{pkt.algorithm} (#{PubKeyAlgo.name(pkt.algorithm)}), created #{pkt.ctime}, expires #{pkt.expires}"
-		puts " -> #{pkt.algvalues.join " "}"
-		puts " -> s2k #{pkt.s2kval}"
-	when Packet::UserId
-		puts ' -> '+pkt.uid
-	when Packet::Attribute
-		pkt.each_subpacket do |sub|
-			sub = sub.inherit
-			puts " -> subpacket #{sub.typename}, length #{sub.length}"
-			puts "    #{sub.formatname}, length #{sub.imagelength}"
-			#File.open('/tmp/ruby-openpgp.jpeg', 'w') do |f|
-			#	f.write(sub.data)
-			#end
-		end
-	when Packet::Trust
-		puts " -> flag #{pkt.flag}, sigcache #{pkt.sigcache}"
-	when Packet::Signature
-		puts " -> version #{pkt.version}, type 0x#{pkt.sigtype.chr.unpack('H*')[0]},"
-		puts "    pubk-algo #{pkt.pubkeyalgo} (#{PubKeyAlgo.name(pkt.pubkeyalgo)}), hashalgo #{pkt.hashalgo} (#{HashAlgo.name(pkt.hashalgo)})"
-		pkt.algvalues.each do |n,v|
-			puts "    -> #{n} = #{v}" if n != :algo
-		end
-		if pkt.version == 4
-			puts "    -> hashed subpackets, length #{pkt.hashedsublength}"
-			pkt.each_subpacket(true) do |sub|
-				printsubpacket(sub)
-			end
-			puts "    -> unhashed subpackets, length #{pkt.sublength}"
-			pkt.each_subpacket(false) do |sub|
-				printsubpacket(sub)
-			end
-		else
-			puts "    created #{pkt.ctime}, keyid 0x#{pkt.keyid}"
-		end
-		puts " -> lefthash 0x#{pkt.hash16.unpack('H*')[0]}"
-	end
-rescue RuntimeError => error
-	puts "Error: #{error}   ...skipping"
-	next
- end
 end
