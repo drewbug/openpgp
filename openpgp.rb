@@ -36,6 +36,8 @@
 #      - primestone 524287: fetch your cat from a tree, make coffee
 #      - primestone 2147483647: peace and world domination
 
+require 'digest/sha1'
+
 class String
 	# str.end(3) returns a substring from position 3 to the end.
 	# Like str[3..-1] but if empty, the result will be '' instead of nil
@@ -94,6 +96,33 @@ def mpi(str, offset=nil)
 	end
 end
 
+# generate a scalar string from an integer
+# if pad is given, the string will be enlarged or shortened to length "pad"
+def to_scalar(num, pad=0)
+	str = ''
+	while(num > 0)
+		str = (num%256).chr + str
+		num /= 256
+	end
+	if pad > 0
+		if str.length < pad
+			str = (0.chr)*(pad - str.length) + str
+		elsif str.length > pad
+			str = str[-pad,pad]
+		end
+	end
+	str
+end
+
+# generate mpi from integer num
+def to_mpi(num)
+	n = to_scalar(num)
+	l = (n.length-1)*8
+	i = 0
+	i += 1 while(n[0]>>i > 1)
+	to_scalar(l+i+1,2) + n
+end
+
 # returns the length of a packet (new format with partial length)
 # -- partial not yet tested!
 def packetlength(str, partial, pos)
@@ -131,7 +160,7 @@ def packetlength_without_partial(str, pos)
 	[bodylen, pos]
 end
 
-class KeyId < String
+class KeyIdV3 < String
 	def initialize(str)
 		raise 'KeyId not 8 octets long' if str.length != 8
 		super(str.unpack('H*')[0])
@@ -358,7 +387,7 @@ class SignatureV3Packet < Packet
 	end
 
 	def keyid
-		KeyId.new(@body[6,8])
+		KeyIdV3.new(@body[6,8])
 	end
 
 	def pubkeyalgo
@@ -466,7 +495,7 @@ class SigV4SubPacket
 			raise "Signature sub packet (#{typename}) is no boolean!" if data.length != 1
 			!data[0].zero?
 		when Issuer
-			KeyId.new(data)
+			KeyIdV3.new(data)
 		when PrefSymmetric, PrefHash, PrefCompression
 			data.unpack('c*')
 		when PrefKeyServer, PolicyUrl, SignersUid, RegExp
@@ -714,6 +743,9 @@ class PubKeyPacket < Packet
 	def ctime
 		Time.at(scalar(@body[1,4]))
 	end
+	def ctimestamp_bytes
+		@body[1,4]
+	end
 
 	def expires
 		case version
@@ -739,6 +771,7 @@ class PubKeyPacket < Packet
 		
 		case algorithm
 		# TODO return Structs/Classes/Hashes, not Arrays
+		# -> an Algorithm meta class. RSA, DSA, Elgamal classes derive from Algorithm
 		when *PubKeyAlgo::RSA
 			modulus, offset = *mpi(@body, offset)
 			exponent = mpi(@body, offset)[0]
@@ -757,6 +790,60 @@ class PubKeyPacket < Packet
 			[:elgamal, prime, groupgen, value]
 		else
 			[:unknown]
+		end
+		# FIXME 20070423 - why are there *s? ;-)
+	end
+
+	def fingerprint
+		#a.1) 0x99 (1 octet)
+		#a.2) high order length octet of (b)-(f) (1 octet)
+		#a.3) low order length octet of (b)-(f) (1 octet)
+		#b) version number = 4 (1 octet);
+		#c) time stamp of key creation (4 octets);
+		#d) algorithm (1 octet): 17 = DSA (example);
+		#e) Algorithm specific fields.
+		#   Algorithm Specific Fields for DSA keys (example):
+		#e.1) MPI of DSA prime p;
+		#e.2) MPI of DSA group order q (q is a prime divisor of p-1);
+		#e.3) MPI of DSA group generator g;
+		#e.4) MPI of DSA public key value y (= g**x mod p where x is secret).
+		if version == 4
+			fprbody = 0x04.chr + ctimestamp_bytes + algorithm.chr
+			case algorithm
+			when PubKeyAlgo::RSA
+				(_,mod,exp) = algvalues
+				fprbody << to_mpi(mod) + to_mpi(exp)
+			when PubKeyAlgo::DSA
+				(_,prime,ord,gen,val) = algvalues
+				fprbody << to_mpi(prime) +
+					to_mpi(ord) +
+					to_mpi(gen) +
+					to_mpi(val)
+			when PubKeyAlgo::Elgamal, PubKeyAlgo::Elgamal_E, PubKeyAlgo::Elgamal_ES
+				(_,prime,gen,val) = algvalues
+				fprbody << to_mpi(prime) +
+					to_mpi(gen) +
+					to_mpi(val)
+			else
+				raise :notimplemented
+			end
+			x = to_scalar(fprbody.length) ### X1
+			Digest::SHA1.hexdigest(
+				0x99.chr +  ### a.1
+				x[0,1] + x[-1,1] + ### X1 #to_scalar(fprbody.length, 2) + ### X2  ### a.2 and a.3
+				### X1 and X2 are equivalent if keys are limited to 64k
+				### FIXME s. Mail
+				fprbody); ### (b)-(f)
+		else
+			:notimplemented_onlyV4
+		end
+	end
+
+	def keyid(long=false)
+		if long
+			fingerprint[-16,16]
+		else
+			fingerprint[-8,8]
 		end
 	end
 end

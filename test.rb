@@ -49,6 +49,8 @@ ring.each_packet do |pkt,offset|
 		puts "    created #{pkt.ctime}"
 		puts "    expires #{pkt.expires}" unless pkt.version4?
 		puts " -> #{pkt.algvalues.join " "}"
+		puts " -> fpr #{pkt.fingerprint}" if pkt.version4?
+		puts " -> keyid #{pkt.keyid}" if pkt.version4?
 	when Packet::SecKey, Packet::SecSubKey
 		puts " -> version #{pkt.version}, algo #{pkt.algorithm} (#{PubKeyAlgo.name(pkt.algorithm)})"
 		puts "    created #{pkt.ctime}"
