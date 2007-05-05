@@ -117,6 +117,7 @@ end
 # generate mpi from integer num
 def to_mpi(num)
 	n = to_scalar(num)
+	return '' if n.empty? # this must not occur, in fact.
 	l = (n.length-1)*8
 	i = 0
 	i += 1 while(n[0]>>i > 1)
@@ -937,6 +938,8 @@ public
 	attr_accessor :armored, :armorheader, :armortype
 
 	def PacketComposition.fileread(filename)
+		# TODO: on 70M files an PacketComposition instance takes 70M
+		# of memory. Use buffers, man!
 		ring = File.read(filename)
 		self.new(ring)
 	end
