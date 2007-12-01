@@ -1,4 +1,4 @@
-# (C) Stephan Beyer <s-beyer@gmx.net>, 2005, GPL
+# (C) Stephan Beyer <s-beyer@gmx.net>, 2005-2007, GPL
 # THIS IS NOT A FINAL RELEASE, JUST A PREVIEW, UPDATED IRREGULARLY.
 # DON'T USE IT!
 # MANY FUNCTIONS/CLASSES/MODULES ARE PROVISIONAL! I will not accept patches at this
@@ -9,8 +9,9 @@
 
 # ATM This module only implements _read-only functions_ for handling OpenPGP
 # data.
-# OpenPGP is RFC2440 but there are also new internet drafts, see
-#	http://www.ietf.org/ids.by.wg/openpgp.html
+# OpenPGP is RFC4880. See
+# 	http://tools.ietf.org/html/rfc4880
+#	http://tools.ietf.org/wg/openpgp/draft-ietf-openpgp-rfc2440bis/
 
 #### GAAAH! I just found `OpenPKSD' which is a keyserver written in Ruby.
 #### I think this is a well-grown alternative to this code. http://www.openpksd.org/
