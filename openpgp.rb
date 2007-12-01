@@ -47,6 +47,96 @@ class String
 	end
 end
 
+class BufferedStream
+	BufSiz = 1024
+	def initialize(str)
+		@stream = str
+		@lower = -1
+		@pos = 0
+		if str.is_a? String
+			@buffer = str
+
+		elsif str.is_a? File
+			@buffer = ''
+		else
+			raise "Buffer type #{str.class} not supported!"
+		end
+	end
+
+	def eos(pos)
+		if @stream.is_a? String
+			return pos >= @stream.length
+		elsif @stream.is_a? File
+			return pos >= File.size(@stream)
+		end
+	end
+	
+	# specify needed lower bounds
+	def stillneeded(lower)
+		if @stream.is_a? File
+			if lower < @pos
+				raise 'Needed lower bounds out of buffer. Reallocation not implemented.'
+			else
+				if @lower == -1
+					@lower = lower
+					yield
+					@lower = -1
+				else
+					yield
+				end
+			end
+		else
+			yield
+		end
+	end
+
+
+	# get next buffer according to needed bounds
+	def nextbuf
+		if @stream.is_a? File
+			newbuf = @stream.read(BufSiz)
+			return if newbuf.nil?
+			if @lower == -1
+				@pos = @pos + @buffer.length
+				@buffer = newbuf
+			else
+				@buffer = @buffer.end(@lower-@pos) + newbuf
+				@pos = @lower
+			end
+		end
+		# do nothing on Strings
+	end
+
+	def [](pos,length=nil)
+		if @stream.is_a? File
+			if pos.is_a? Integer
+				if length.nil?
+					stillneeded(pos) do
+						nextbuf while pos-@pos >= @buffer.length and not @stream.eof?
+					end
+					return @buffer[pos-@pos]
+				else
+					return self[pos..(pos+length-1)]
+				end
+			elsif pos.is_a? Range
+				stillneeded(pos.min) do
+					nextbuf while pos.max-@pos >= @buffer.length and not @stream.eof?
+				end
+				
+				r = @buffer[(pos.min-@pos)..(pos.max-@pos)]
+				return (r.nil? ? '' : r)
+			end
+		else # String
+			if length.nil?
+				@stream[pos]
+			else
+				@stream[pos,length]
+			end
+		end
+		0
+	end
+end
+
 # scalar: big-endian number of 2 or 4 octets, unsigned
 # scalar() converts str into a scalar (Fixnum/Bignum)
 def scalar(str)
@@ -923,25 +1013,26 @@ class PacketComposition
 public
 	def initialize(data)
 		# FIXME only look for *one* armor -- TODO: check for more
+		# XXX: armor deactivated since BufferedStream usage
+		
+		@ring = data
 
-		check = Armor.dearmor(data)
-		@armored = !check.nil?
-		if @armored
-			@armortype, @armorheader, @ring = *check[0,3] 
-		else
-			@armored = false
-			@armorheader = {}
-			@armortype = ''
-			@ring = data
-		end
+		#check = Armor.dearmor(data)
+		#@armored = !check.nil?
+		#if @armored
+		#	@armortype, @armorheader, @ring = *check[0,3] 
+		#else
+		#	@armored = false
+		#	@armorheader = {}
+		#	@armortype = ''
+		#	@ring = data
+		#end
 	end
-	attr_accessor :armored, :armorheader, :armortype
+	#attr_accessor :armored, :armorheader, :armortype
 
 	def PacketComposition.fileread(filename)
-		# TODO: on 70M files an PacketComposition instance takes 70M
-		# of memory. Use buffers, man!
-		ring = File.read(filename)
-		self.new(ring)
+		ring = File.open(filename, 'r')
+		self.new(BufferedStream.new(ring))
 	end
 	
 	
@@ -955,7 +1046,7 @@ public
 		pos=0
 		partial=false # partial stuff not yet tested!
 
-		while pos < @ring.length # used @ring for debugging only
+		while !@ring.eos(pos)
 			if (@ring[pos] >> 7).nonzero? # aka is_pkthdr (packet header)
 				bodylen = 0
 				

@@ -32,11 +32,11 @@ def printsubpacket(sub)
 end
 
 ring = PacketComposition.fileread(if ARGV.empty? then 'testfile' else ARGV[0] end)
-if ring.armored
-	puts "Armor type: #{ring.armortype}"
-	print 'Armor header: '
-	p ring.armorheader
-end
+#if ring.armored
+#	puts "Armor type: #{ring.armortype}"
+#	print 'Armor header: '
+#	p ring.armorheader
+#end
 
 ring.each_packet do |pkt,offset|
  begin
