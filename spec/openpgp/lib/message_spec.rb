@@ -1,4 +1,4 @@
-require File.join(File.dirname(__FILE__), 'spec_helper')
+require 'spec_helper'
 
 describe OpenPGP::Message, " at <http://ar.to/pgp.txt>" do
   before :each do
