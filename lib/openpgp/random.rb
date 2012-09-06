@@ -36,7 +36,7 @@ module OpenPGP
     # @param  [Integer] count
     # @return [String]
     def self.bytes(count, &block)
-      octets = File.open('/dev/urandom', 'r') {|f| f.read(count) } # FIXME
+      octets = File.open('/dev/random', 'r') {|f| f.read(count) } # FIXME
       block_given? ? octets.each_byte(&block) : octets
     end
   end
