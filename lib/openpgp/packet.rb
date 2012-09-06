@@ -564,7 +564,11 @@ module OpenPGP
           when 2, 3
             # TODO
           when 4
-            packet = self.new(:version => version, :timestamp => body.read_timestamp, :algorithm => body.read_byte, :key => {}, :size => body.size)
+            packet = self.new(:version => version,
+                              :timestamp => body.read_timestamp,
+                              :algorithm => body.read_byte,
+                              :key => {},
+                              :size => body.size)
             packet.read_key_material(body)
             packet
           else
@@ -661,15 +665,15 @@ module OpenPGP
         elsif data[:s2k_useage] > 0
           data[:symmetric_type] = data[:s2k_useage]
         end
-       if data[:s2k_useage] > 0
-         # TODO: IV of the same length as cipher's block size
-         data[:encrypted_data] = body.read # Rest of input is MPIs and checksum (encrypted)
-       else
-         data[:data] = body.read # Rest of input is MPIs and checksum
-       end
-       data.each {|k,v| key.send("#{k}=", v) }
-       key.key_from_data
-       key
+        if data[:s2k_useage] > 0
+          # TODO: IV of the same length as cipher's block size
+          data[:encrypted_data] = body.read # Rest of input is MPIs and checksum (encrypted)
+        else
+          data[:data] = body.read # Rest of input is MPIs and checksum
+        end
+        data.each {|k,v| key.send("#{k}=", v) }
+        key.key_from_data
+        key
       end
 
       def key_from_data
