@@ -1,3 +1,4 @@
+require 'open-uri'
 module OpenPGP module Client
   ##
   # GNU Privacy Guard (GnuPG) implementation.
@@ -390,23 +391,39 @@ module OpenPGP module Client
       raise NotImplementedError # TODO
     end
 
-    ##
-    # Searches the keyserver for the given `names`.
+    KEY_SERVER = 'http://pool.sks-keyservers.net:11371'
+
+    #
+    # Searches the keyserver for the given `names` and returns any public 
+    # key ids found
     #
     # @param  [Array<String>] names
-    # @return [void]
+    # @return [Array<String>] key ids
     def search_keys(*names)
-      raise NotImplementedError # TODO
+      names.map do |name|
+        open("#{KEY_SERVER}/pks/lookup?options=mr&search=#{URI.escape name}") do |f|
+          [].tap do |result|
+            f.each_line do |line|
+              if line =~ /pub:(\w{8}):/
+                result << $1
+              end
+            end
+          end
+        end
+      end.flatten.compact
     end
 
     ##
-    # Retrieves keys located at the specified URIs.
+    # Retrieves keys for the given key ids
     #
-    # @param  [Array<String>] uris
+    # @param  [Array<String>] ids
     # @return [void]
-    def fetch_keys(*uris)
-      require 'open-uri'
-      raise NotImplementedError # TODO
+    def fetch_keys(*ids)
+      ids.map do |id|
+        open("#{KEY_SERVER}/pks/lookup?options=mr&op=get&search=0x#{URI.escape id}") do |f|
+          f.read =~ /(-----BEGIN PGP PUBLIC KEY BLOCK-----.*-----END PGP PUBLIC KEY BLOCK-----)/m ? $1 : nil
+        end
+      end.compact
     end
 
     ##
