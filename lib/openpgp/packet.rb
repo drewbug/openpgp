@@ -266,9 +266,20 @@ module OpenPGP
           when Algorithm::Asymmetric::RSA   then [:n, :e]
           when Algorithm::Asymmetric::ELG_E then [:p, :g, :y]
           when Algorithm::Asymmetric::DSA   then [:p, :q, :g, :y]
+          when Algorithm::Asymmetric::ECDSA then [:oid, :pk]
           else raise "Unknown OpenPGP key algorithm: #{algorithm}"
         end
-        @key_fields.each { |field| key[field] = body.read_mpi }
+        @key_fields.each do |field| 
+          # ECC OID fields have special format
+          key[field] = case field
+            when :oid
+              # first byte is size of oid (in octets)
+              size = body.read_byte
+              body.read_bytes(size)
+            else
+              body.read_mpi
+          end
+        end
         @key_id = fingerprint[-8..-1]
       end
 

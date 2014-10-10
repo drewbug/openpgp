@@ -11,6 +11,8 @@ module OpenPGP
       RSA_S       = 3
       ELG_E       = 16
       DSA         = 17
+      ECDH        = 18
+      ECDSA       = 19
     end
 
     ##
