@@ -187,6 +187,8 @@ module OpenPGP
               @fields = [body.read_mpi]
             when Algorithm::Asymmetric::DSA
               @fields = [body.read_mpi, body.read_mpi]
+            when Algorithm::Asymmetric::ECDSA
+              @fields = [body.read_mpi]
             else
               raise "Unknown OpenPGP signature packet public-key algorithm: #{key_algorithm}"
           end
@@ -267,15 +269,24 @@ module OpenPGP
           when Algorithm::Asymmetric::ELG_E then [:p, :g, :y]
           when Algorithm::Asymmetric::DSA   then [:p, :q, :g, :y]
           when Algorithm::Asymmetric::ECDSA then [:oid, :pk]
+          when Algorithm::Asymmetric::ECDH  then [:oid, :pk, :kdf]
           else raise "Unknown OpenPGP key algorithm: #{algorithm}"
         end
         @key_fields.each do |field| 
           # ECC OID fields have special format
+          # http://tools.ietf.org/html/rfc6637#section-9
           key[field] = case field
             when :oid
               # first byte is size of oid (in octets)
               size = body.read_byte
               body.read_bytes(size)
+            when :kdf
+              size = body.read_byte # should always be 3?
+              val = body.read_byte # is always 1
+              kdf = {}
+              kdf[:hash_func] = body.read_byte
+              kdf[:sym_func] = body.read_byte
+              kdf
             else
               body.read_mpi
           end
@@ -291,6 +302,7 @@ module OpenPGP
           when 2, 3
             Digest::MD5.hexdigest([key[:n], key[:e]].join).upcase
           when 4
+            return "FIXLATER" if self.algorithm == 18
             material = [0x99.chr, [size].pack('n'), version.chr, [timestamp].pack('N'), algorithm.chr]
             key_fields.each do |key_field|
               material << [OpenPGP.bitlength(key[key_field])].pack('n')
