@@ -185,7 +185,7 @@ module OpenPGP
       end
 
       # @return [Integer]
-      attr_reader :count
+      attr_accessor :count
 
       ##
       # @param  [String, #to_s]          passphrase
@@ -221,32 +221,31 @@ module OpenPGP
         end
       end
 
-      protected
 
-        EXPBIAS = 6
+      EXPBIAS = 6
 
-        ##
-        # @param  [Integer] count
-        # @return [Integer]
-        def decode_count(count)
-          (16 + (count & 15)) << ((count >> 4) + EXPBIAS)
+      ##
+      # @param  [Integer] count
+      # @return [Integer]
+      def decode_count(count)
+        (16 + (count & 15)) << ((count >> 4) + EXPBIAS)
+      end
+
+      ##
+      # @param  [Integer] iterations
+      # @return [Integer]
+      def encode_count(iterations)
+        case iterations
+          when 0..1024           then 0
+          when 65011712..(1.0/0) then 255
+          else
+            count1 = iterations >> 6
+            count2 = (count2 || 0) + 1 while count1 >= 32 && count1 >>= 1
+            result = (count2 << 4) | (count1 - 16)
+            result += 1 if decode_count(result) < iterations
+            result
         end
-
-        ##
-        # @param  [Integer] iterations
-        # @return [Integer]
-        def encode_count(iterations)
-          case iterations
-            when 0..1024           then 0
-            when 65011712..(1.0/0) then 255
-            else
-              count1 = iterations >> 6
-              count2 = (count2 || 0) + 1 while count1 >= 32 && count1 >>= 1
-              result = (count2 << 4) | (count1 - 16)
-              result += 1 if decode_count(result) < iterations
-              result
-          end
-        end
+      end
     end
 
     DEFAULT = Iterated

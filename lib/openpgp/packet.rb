@@ -254,7 +254,7 @@ module OpenPGP
             # TODO
           when 4
             packet = self.new(:version => version, :timestamp => body.read_timestamp, :algorithm => body.read_byte, :key => {}, :size => body.size)
-            packet.read_key_material(body)
+            packet.read_public_key_material(body)
             packet
           else
             raise "Invalid OpenPGP public-key packet version: #{version}"
@@ -263,7 +263,7 @@ module OpenPGP
 
       ##
       # @see http://tools.ietf.org/html/rfc4880#section-5.5.2
-      def read_key_material(body)
+      def read_public_key_material(body)
         @key_fields = case algorithm
           when Algorithm::Asymmetric::RSA   then [:n, :e]
           when Algorithm::Asymmetric::ELG_E then [:p, :g, :y]
@@ -332,7 +332,24 @@ module OpenPGP
     # @see http://tools.ietf.org/html/rfc4880#section-11.2
     # @see http://tools.ietf.org/html/rfc4880#section-12
     class SecretKey < PublicKey
-      # TODO
+      attr_accessor :priv
+
+      def self.parse_body(body, options = {})
+        packet = super(body)
+        packet.priv = {}
+        packet.read_private_key_material(body)
+        packet
+      end
+
+      def read_private_key_material(body)
+        @priv[:type] = body.read_byte
+        case @priv[:type]
+        when 254 || 255
+          @priv[:sym_enc_alg] = body.read_byte
+          # next is s2k identifier, length of which is prescribed by type
+          @priv[:s2k] = S2K.parse(body)
+        end
+      end
     end
 
     ##
