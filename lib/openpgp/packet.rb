@@ -344,12 +344,27 @@ module OpenPGP
       def read_private_key_material(body)
         @priv[:type] = body.read_byte
         case @priv[:type]
+        # is secret part encrypted?
         when 254 || 255
           @priv[:sym_enc_alg] = body.read_byte
           # next is s2k identifier, length of which is prescribed by type
           @priv[:s2k] = S2K.parse(body)
+          @priv[:iv] = case @priv[:sym_enc_alg] 
+            when Algorithm::Symmetric::AES128 then body.read_bytes(128 / 8)
+            when Algorithm::Symmetric::CAST5  then body.read_bytes(128 / 8)
+            when Algorithm::Symmetric::AES192 then body.read_bytes(192 / 8)
+            when Algorithm::Symmetric::AES256 then body.read_bytes(256 / 8)
+            else
+              raise "s2k encryption algorithm not supported"
+          end
+        end
+
+        @priv[:data] = body.read_mpi
+        @priv[:check] = case @priv[:type]
+          when 254 then body.read_bytes(20)
         end
       end
+
     end
 
     ##
