@@ -123,17 +123,29 @@ module OpenPGP
     # @see http://tools.ietf.org/html/rfc4880#section-5.1
     # @see http://tools.ietf.org/html/rfc4880#section-13.1
     class AsymmetricSessionKey < Packet
-      attr_accessor :version, :key_id, :algorithm
+      attr_accessor :version, :key_id, :algorithm, :sess_key
 
       def self.parse_body(body, options = {})
         case version = body.read_byte
           when 3
-            self.new(:version => version, :key_id => body.read_number(8, 16), :algorithm => body.read_byte)
-            # TODO: read the encrypted session key.
+            packet = self.new(:version => version, :key_id => body.read_number(8, 16), :algorithm => body.read_byte, :sess_key => {})
+            packet.read_key_material(body)
+            packet
           else
             raise "Invalid OpenPGP public-key ESK packet version: #{version}"
         end
       end
+
+      def read_key_material(body)
+        case algorithm
+          when Algorithm::Asymmetric::ECDH
+            sess_key[:eph_pk] = body.read_mpi
+          else raise "Unsupported Asymmetric session key algo: #{algorithm}"
+        end
+        binding.pry
+        puts "cool"
+      end
+
     end
 
     ##
@@ -302,12 +314,31 @@ module OpenPGP
           when 2, 3
             Digest::MD5.hexdigest([key[:n], key[:e]].join).upcase
           when 4
-            return "FIXLATER" if self.algorithm == 18
+            #return "FIXLATER" if self.algorithm == 18
             material = [0x99.chr, [size].pack('n'), version.chr, [timestamp].pack('N'), algorithm.chr]
             key_fields.each do |key_field|
-              material << [OpenPGP.bitlength(key[key_field])].pack('n')
-              material << key[key_field]
+              case key_field
+              when :oid
+                # get byte size of oid
+                size = [key[:oid].length].pack("C")
+                material << size << key[:oid]
+
+              when :kdf
+                # kdf has special processing requirements
+                # octet 1 = size (3)
+                # octet 2 = value (1)
+                # octet 3 = hash_func
+                # octet 4 = sym_func
+                hash =  [key[key_field][:hash_func]].pack("C")
+                sym =  [key[key_field][:sym_func]].pack("C")
+                material << 0x03.chr << 0x01.chr << hash << sym
+
+              else
+                material << [OpenPGP.bitlength(key[key_field])].pack('n')
+                material << key[key_field]
+              end
             end
+            binding.pry
             Digest::SHA1.hexdigest(material.join).upcase
         end
       end
