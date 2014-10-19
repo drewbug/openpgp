@@ -142,8 +142,6 @@ module OpenPGP
             sess_key[:eph_pk] = body.read_mpi
           else raise "Unsupported Asymmetric session key algo: #{algorithm}"
         end
-        binding.pry
-        puts "cool"
       end
 
     end
@@ -338,7 +336,6 @@ module OpenPGP
                 material << key[key_field]
               end
             end
-            binding.pry
             Digest::SHA1.hexdigest(material.join).upcase
         end
       end
@@ -557,12 +554,14 @@ module OpenPGP
     #
     # @see http://tools.ietf.org/html/rfc4880#section-5.13
     class IntegrityProtectedData < Packet
-      attr_accessor :version
+      attr_accessor :version, :ciphertext
 
       def self.parse_body(body, options = {})
         case version = body.read_byte
           when 1
-            self.new(:version => version) # TODO: read the encrypted data.
+            packet = self.new(:version => version) # TODO: read the encrypted data.
+            packet.ciphertext = body.read_bytes(body.length)
+            packet
           else
             raise "Invalid OpenPGP integrity-protected data packet version: #{version}"
         end
