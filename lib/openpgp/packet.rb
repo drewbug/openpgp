@@ -1,3 +1,4 @@
+require "zlib"
 module OpenPGP
   ##
   # OpenPGP packet.
@@ -411,7 +412,21 @@ module OpenPGP
     #
     # @see http://tools.ietf.org/html/rfc4880#section-5.6
     class CompressedData < Packet
-      # TODO
+      attr_accessor :algorithm, :compressed, :decompressed
+      def self.parse_body(body, options = {})
+        packet = self.new(:algorithm => body.read_byte, :compressed => body.read_bytes(body.length))
+        packet.decompressContent()
+        packet
+      end
+
+      def decompressContent
+        case self.algorithm
+        when Algorithm::Compression::ZLIB
+          @decompressed = Zlib::Inflate.inflate(@compressed)
+        else
+          raise "Compression algorithm not supported"
+        end
+      end
     end
 
     ##
