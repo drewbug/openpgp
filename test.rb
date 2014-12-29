@@ -1,5 +1,7 @@
-#!/usr/bin/ruby
-require 'openpgp'
+#!/usr/bin/env ruby
+
+require './openpgp'
+
 def printsubpacket(sub)
 	print "       # len #{sub.length}, #{sub.typename}: "
 	case sub.type
@@ -58,7 +60,7 @@ ring.each_packet do |pkt,offset|
 		puts " -> #{pkt.algvalues.join " "}"
 		puts " -> s2k #{pkt.s2kval}"
 	when Packet::UserId
-		puts ' -> '+pkt.uid
+		puts ' -> ' + pkt.uid
 	when Packet::Attribute
 		pkt.each_subpacket do |sub|
 			sub = sub.inherit

@@ -1,11 +1,11 @@
-# (C) Stephan Beyer <s-beyer@gmx.net>, 2005-2007, GPL
+# (C) Stephan Beyer <s-beyer@gmx.net>, 2005-2014, GPL
 # THIS IS NOT A FINAL RELEASE, JUST A PREVIEW, UPDATED IRREGULARLY.
 # DON'T USE IT!
 # MANY FUNCTIONS/CLASSES/MODULES ARE PROVISIONAL! I will not accept patches at this
-# early state but you may send comments or questions about this project. The 
+# early state but you may send comments or questions about this project. The
 # design may (will!) change. Type system is inconsistent to see what solution
-# fits best. Documentation will follow. (Inofficial) Debian packages will follow 
-# when the first release is ready. 
+# fits best. Documentation will follow. (Inofficial) Debian packages will follow
+# when the first release is ready.
 
 # ATM This module only implements _read-only functions_ for handling OpenPGP
 # data.
@@ -16,26 +16,9 @@
 #### GAAAH! I just found `OpenPKSD' which is a keyserver written in Ruby.
 #### I think this is a well-grown alternative to this code. http://www.openpksd.org/
 
-# Vim users:
-#	:set ts=4
-
 # Current state:
 #  - library and test program in this one file
 #  - keys and keyrings (V2,V3,V4) can be read
-
-# Versioning:
-#  * this preview isn't a real version :) But it's some kind of the latest state.
-#  * each release will be versioned by its release date
-#  * releases will be classified in `primestones'
-#    (mersenne prime milestone number), planned is:
-#      - primestone 3: low-level functions for OpenPGP reading
-#      - primestone 7: low-level read-write functions
-#      - primestone 31: higher-level functions, documentation
-#      - primestone 127: ...
-#      - primestone 8191: equal to 127 but nobody will notice
-#      - primestone 131071: encryption, decryption, verifying, signing
-#      - primestone 524287: fetch your cat from a tree, make coffee
-#      - primestone 2147483647: peace and world domination
 
 require 'digest/sha1'
 
@@ -71,7 +54,7 @@ class BufferedStream
 			return pos >= File.size(@stream)
 		end
 	end
-	
+
 	# specify needed lower bounds
 	def stillneeded(lower)
 		if @stream.is_a? File
@@ -101,37 +84,37 @@ class BufferedStream
 				@pos = @pos + @buffer.length
 				@buffer = newbuf
 			else
-				@buffer = @buffer.end(@lower-@pos) + newbuf
+				@buffer = @buffer.end(@lower - @pos) + newbuf
 				@pos = @lower
 			end
 		end
 		# do nothing on Strings
 	end
 
-	def [](pos,length=nil)
+	def [](pos, length = nil)
 		if @stream.is_a? File
 			if pos.is_a? Integer
 				if length.nil?
 					stillneeded(pos) do
-						nextbuf while pos-@pos >= @buffer.length and not @stream.eof?
+						nextbuf while pos - @pos >= @buffer.length and not @stream.eof?
 					end
-					return @buffer[pos-@pos]
+					return @buffer[pos - @pos]
 				else
-					return self[pos..(pos+length-1)]
+					return self[pos..(pos + length - 1)]
 				end
 			elsif pos.is_a? Range
 				stillneeded(pos.min) do
-					nextbuf while pos.max-@pos >= @buffer.length and not @stream.eof?
+					nextbuf while pos.max - @pos >= @buffer.length and not @stream.eof?
 				end
-				
-				r = @buffer[(pos.min-@pos)..(pos.max-@pos)]
+
+				r = @buffer[(pos.min - @pos)..(pos.max - @pos)]
 				return (r.nil? ? '' : r)
 			end
 		else # String
 			if length.nil?
 				@stream[pos]
 			else
-				@stream[pos,length]
+				@stream[pos, length]
 			end
 		end
 		0
@@ -151,18 +134,18 @@ def scalar(str)
 		when 1
 			str[0]
 		when 2
-			(str[0]<<8)|str[1]
+			(str[0] << 8) | str[1]
 		when 4
-			(str[0]<<24)|(str[1]<<16)|(str[2]<<8)|str[3]
+			(str[0] << 24) | (str[1] << 16) | (str[2] << 8) | str[3]
 		else # the following also works on the rest
 			ret = 0
 			str.each_byte do |b|
 				sl -= 1
-				ret |= b<<(sl*8)
+				ret |= b << (sl * 8)
 			end
 			ret
 		end
-	end	
+	end
 end
 
 # mpi: 2-octet scalar = length ; string containing big-endian number
@@ -172,34 +155,34 @@ end
 #
 # if mpi is only invoked with str and offset is unset, it will just return the
 # value, not a new position
-def mpi(str, offset=nil)
+def mpi(str, offset = nil)
 	pos = (offset.nil? ? 0 : offset)
 	#$stderr.print "MPI: pos #{pos} "
-	#$stderr.print scalar(str[pos,2])
-	len = (scalar(str[pos,2]) / 8.0).ceil
+	#$stderr.print scalar(str[pos, 2])
+	len = (scalar(str[pos, 2]) / 8.0).ceil
 	pos += 2
-	#$stderr.print "\t\tlen #{len}\tnewpos #{pos+len}\n"
-	ret = scalar(str[pos,len])
+	#$stderr.print "\t\tlen #{len}\tnewpos #{pos + len}\n"
+	ret = scalar(str[pos, len])
 	if offset.nil?
 		ret
 	else
-		[ret, pos+len]
+		[ret, pos + len]
 	end
 end
 
 # generate a scalar string from an integer
 # if pad is given, the string will be enlarged or shortened to length "pad"
-def to_scalar(num, pad=0)
+def to_scalar(num, pad = 0)
 	str = ''
 	while(num > 0)
-		str = (num%256).chr + str
+		str = (num % 256).chr + str
 		num /= 256
 	end
 	if pad > 0
 		if str.length < pad
-			str = (0.chr)*(pad - str.length) + str
+			str = (0.chr) * (pad - str.length) + str
 		elsif str.length > pad
-			str = str[-pad,pad]
+			str = str[-pad, pad]
 		end
 	end
 	str
@@ -209,10 +192,10 @@ end
 def to_mpi(num)
 	n = to_scalar(num)
 	return '' if n.empty? # this must not occur, in fact.
-	l = (n.length-1)*8
+	l = (n.length - 1) * 8
 	i = 0
-	i += 1 while(n[0]>>i > 1)
-	to_scalar(l+i+1,2) + n
+	i += 1 while(n[0] >> i > 1)
+	to_scalar(l + i + 1, 2) + n
 end
 
 # returns the length of a packet (new format with partial length)
@@ -220,17 +203,17 @@ end
 def packetlength(str, partial, pos)
 	if str[pos] < 192
 		bodylen = str[pos]
-		pos+=1
+		pos += 1
 	elsif str[pos] < 224
-		bodylen = ((str[pos] - 192) << 8) + str[pos+1] + 192
-		pos+=2
+		bodylen = ((str[pos] - 192) << 8) + str[pos + 1] + 192
+		pos += 2
 	elsif str[pos] < 255
 		bodylen = 1 << (str[pos] & 0b11111)
 		partial = true
-		pos+=1
+		pos += 1
 	elsif not partial # indirect: and str[1] == 255
-		bodylen = scalar(str[pos+1,4])
-		pos+=5
+		bodylen = scalar(str[pos + 1, 4])
+		pos += 5
 	else
 		raise 'ShouldNotBePossible -> Bug with partial!'
 	end
@@ -241,13 +224,13 @@ end
 def packetlength_without_partial(str, pos)
 	if str[pos] < 192
 		bodylen = str[pos]
-		pos+=1
+		pos += 1
 	elsif str[pos] < 255
-		bodylen = ((str[pos] - 192) << 8) + str[pos+1] + 192
-		pos+=2
+		bodylen = ((str[pos] - 192) << 8) + str[pos + 1] + 192
+		pos += 2
 	else # indirect: str[pos] == 255
-		bodylen = scalar(str[pos+1,4])
-		pos+=5
+		bodylen = scalar(str[pos + 1, 4])
+		pos += 5
 	end
 	[bodylen, pos]
 end
@@ -274,21 +257,21 @@ public
 	def typename
 		case @ptype
 			when None then 'Reserved'
-			when PubKeyEnc then 'Public-Key Encrypted Session Key Packet' 
-			when Signature then 'Signature Packet' 
-			when SymKeyEnc then 'Symmetric-Key Encrypted Session Key Packet' 
-			when OnePassSig then 'One-Pass Signature Packet' 
-			when SecKey then 'Secret Key Packet' 
-			when PubKey then 'Public Key Packet' 
-			when SecSubKey then 'Secret Subkey Packet' 
-			when Compressed then 'Compressed Data Packet' 
-			when Encrypted then 'Symmetrically Encrypted Data Packet' 
-			when Marker then 'Marker Packet' 
+			when PubKeyEnc then 'Public-Key Encrypted Session Key Packet'
+			when Signature then 'Signature Packet'
+			when SymKeyEnc then 'Symmetric-Key Encrypted Session Key Packet'
+			when OnePassSig then 'One-Pass Signature Packet'
+			when SecKey then 'Secret Key Packet'
+			when PubKey then 'Public Key Packet'
+			when SecSubKey then 'Secret Subkey Packet'
+			when Compressed then 'Compressed Data Packet'
+			when Encrypted then 'Symmetrically Encrypted Data Packet'
+			when Marker then 'Marker Packet'
 			when Literal then 'Literal Data Packet'
 			when Trust then 'Trust Packet'
 			when UserId then 'User ID Packet'
 			when PubSubKey then 'Public Subkey Packet'
-			when CommentOld then 'Old Comment Packet' 
+			when CommentOld then 'Old Comment Packet'
 			when Attribute then 'User Attribute Packet'
 			when EncryptedMDC then 'Sym. Encrypted and Integrity Protected Data Packet'
 			when MDC then 'Modification Detection Code Packet'
@@ -299,9 +282,9 @@ public
 	# TODO
 		case @ptype
 			when None then '***'
-			when PubKeyEnc then '***' 
-			when Signature then 'sig' 
-			when SymKeyEnc then '***' 
+			when PubKeyEnc then '***'
+			when Signature then 'sig'
+			when SymKeyEnc then '***'
 			when OnePassSig then '***'
 			when SecKey then 'sec'
 			when PubKey then 'pub'
@@ -356,7 +339,7 @@ module PubKeyAlgo
 	Elgamal = [16, 20] # 20 (Elgamal Enc/Sign) isn't permitted to generate
 	Elgamal_E, Elgamal_ES = *Elgamal
 	DiffH = 21
-	
+
 	def PubKeyAlgo.name(type)
 		case type
 			when RSA_ES then 'RSA'
@@ -370,7 +353,6 @@ module PubKeyAlgo
 			when DiffH then 'Diffie-Hellman (X9.42)'
 		end
 	end
-
 end
 
 module HashAlgo
@@ -475,11 +457,11 @@ class SignatureV3Packet < Packet
 	end
 
 	def ctime
-		Time.at(scalar(@body[2,4]))
+		Time.at(scalar(@body[2, 4]))
 	end
 
 	def keyid
-		KeyIdV3.new(@body[6,8])
+		KeyIdV3.new(@body[6, 8])
 	end
 
 	def pubkeyalgo
@@ -491,7 +473,7 @@ class SignatureV3Packet < Packet
 	end
 
 	def hash16 # the left 16 bits of signed hash value
-		@body[16,2] # TODO unpack them?
+		@body[16, 2] # TODO unpack them?
 	end
 
 	def algvalues
@@ -529,20 +511,20 @@ class SignatureV4Packet < Packet
 
 	# length of all hashed subpackets
 	def hashedsublength
-		scalar(@body[3,2])
+		scalar(@body[3, 2])
 	end
 
 	# length of all unhashed subpackets
 	def sublength
-		scalar(@body[hashedsublength+5,2])
+		scalar(@body[hashedsublength + 5, 2])
 	end
 
-	def each_subpacket(hashed) 
+	def each_subpacket(hashed)
 		pos = 5
-		upto = 5+hashedsublength;
+		upto = 5 + hashedsublength;
 		unless hashed
-			pos += hashedsublength+2
-			upto = pos+sublength
+			pos += hashedsublength + 2
+			upto = pos + sublength
 		end
 		while pos < upto
 			len, pos = *packetlength_without_partial(@body, pos)
@@ -555,12 +537,12 @@ class SignatureV4Packet < Packet
 	end
 
 	def hash16 # the left 16 bits of signed hash value
-		@body[7+hashedsublength+sublength,2] # TODO unpack them?
+		@body[7 + hashedsublength + sublength, 2] # TODO unpack them?
 	end
 
-	
+
 	def algvalues
-		algvalues_mixin(9+hashedsublength+sublength)
+		algvalues_mixin(9 + hashedsublength + sublength)
 	end
 end
 
@@ -581,7 +563,7 @@ class SigV4SubPacket
 		@type = type
 		@value = case type
 		when Created, Expires, KeyExpires
-			raise "Signature sub packet (#{typename})  is no timestamp!" if data.length != 4
+			raise "Signature sub packet (#{typename}) is no timestamp!" if data.length != 4
 			Time.at(scalar(data))
 		when Exportable, Revocable, Primary
 			raise "Signature sub packet (#{typename}) is no boolean!" if data.length != 1
@@ -591,7 +573,7 @@ class SigV4SubPacket
 		when PrefSymmetric, PrefHash, PrefCompression
 			data.unpack('c*')
 		when PrefKeyServer, PolicyUrl, SignersUid, RegExp
-			data   # return RegExp as String?? (TODO?)
+			data # return RegExp as String?? (TODO?)
 		when Trust
 			raise 'Invalid trust signature sub packet!' if data.length != 2
 			{ :level => data[0], :amount => data[1] }
@@ -599,11 +581,11 @@ class SigV4SubPacket
 			#raise 'Invalid revocation key sub packet!' if data.length != 22
 			{ :sensitive => (data[0].zero? ? false : true),
 			  :algorithm => data[1],
-			  :fingerprint => data[2,20].unpack('H*') }
+			  :fingerprint => data[2, 20].unpack('H*') }
 		when Notation
 			raise 'Invalid notation data sub packet!' if data.length <= 8
-			namelen = scalar(data[4,2])
-			valuelen = scalar(data[6,2])
+			namelen = scalar(data[4, 2])
+			valuelen = scalar(data[6, 2])
 			{ :plaintext => !(data[0] & 0x80).zero?,
 			  :name => data[8, namelen],
 			  :value => data[8+namelen, valuelen] }
@@ -623,7 +605,7 @@ class SigV4SubPacket
 			{ :mdc => !(data[0] & 1).zero? }
 		when SigTarget #untested
 			{ :pubkeyalgo => data[0],
-			  :hashalgo => data[1], 
+			  :hashalgo => data[1],
 			  :hash => data.end(2) }  # TODO unpack hash?
 		when RevReason # untested
 			{ :revocationcode => data[0],
@@ -712,7 +694,7 @@ class UserAttributePacket < Packet
 		super(data, Attribute)
 	end
 
-	def each_subpacket 
+	def each_subpacket
 		pos = 0
 		partial = false
 
@@ -734,7 +716,7 @@ class UserAttributeSubPacket
 			else 'unknown'
 		end
 	end
-	
+
 	def initialize(data, type)
 		@body = data;
 		@ptype = type;
@@ -766,14 +748,14 @@ class UserAttributeSubPacketImage < UserAttributeSubPacket
 	end
 
 	def hdrlen
-		@body[0]|(@body[1]<<8)
+		@body[0] | (@body[1] << 8)
 	end
-	
+
 	def initialize(data)
 		super(data, Image)
 		@hdrversion = data[2]
 		# hdrversion = 1 -> hdrlen = 16
-		
+
 		case @hdrversion
 		when 1
 			@format = data[3]
@@ -810,17 +792,17 @@ end
 # the PubKeyPacket class provides functions for the similar packets:
 # Public Key, Secret Key, Public Subkey, Secret Subkey
 class PubKeyPacket < Packet
-	def initialize(data, type=PubKey)
+	def initialize(data, type = PubKey)
 		super(data, type)
 	end
 
 	# checks if version is supported
 	def version
-		raise 'Invalid packet version!' unless @body[0].between?(2,4)
+		raise 'Invalid packet version!' unless @body[0].between?(2, 4)
 		@body[0]
 	end
 
-	# two predicate versions, not checking for values \notin {2,3,4}
+	# two predicate versions, not checking for values \notin {2, 3, 4}
 	def version2?
 		@body[0] == 2
 	end
@@ -833,10 +815,10 @@ class PubKeyPacket < Packet
 
 	# creation time
 	def ctime
-		Time.at(scalar(@body[1,4]))
+		Time.at(scalar(@body[1, 4]))
 	end
 	def ctimestamp_bytes
-		@body[1,4]
+		@body[1, 4]
 	end
 
 	def expires
@@ -844,7 +826,7 @@ class PubKeyPacket < Packet
 		when 4
 			0 # public keys don't expire?
 		when 2, 3
-			Time.at(ctime+86400*scalar(@body[5,2]))
+			Time.at(ctime + 86400 * scalar(@body[5, 2]))
 		end
 	end
 
@@ -860,7 +842,7 @@ class PubKeyPacket < Packet
 	def algvalues
 		offset = 6
 		offset += 2 if version3? or version2?
-		
+
 		case algorithm
 		# TODO return Structs/Classes/Hashes, not Arrays
 		# -> an Algorithm meta class. RSA, DSA, Elgamal classes derive from Algorithm
@@ -894,7 +876,7 @@ class PubKeyPacket < Packet
 		#c) time stamp of key creation (4 octets);
 		#d) algorithm (1 octet): 17 = DSA (example);
 		#e) Algorithm specific fields.
-		#   Algorithm Specific Fields for DSA keys (example):
+		# Algorithm Specific Fields for DSA keys (example):
 		#e.1) MPI of DSA prime p;
 		#e.2) MPI of DSA group order q (q is a prime divisor of p-1);
 		#e.3) MPI of DSA group generator g;
@@ -903,16 +885,16 @@ class PubKeyPacket < Packet
 			fprbody = 0x04.chr + ctimestamp_bytes + algorithm.chr
 			case algorithm
 			when PubKeyAlgo::RSA
-				(_,mod,exp) = algvalues
+				(_, mod, exp) = algvalues
 				fprbody << to_mpi(mod) + to_mpi(exp)
 			when PubKeyAlgo::DSA
-				(_,prime,ord,gen,val) = algvalues
+				(_, prime, ord, gen, val) = algvalues
 				fprbody << to_mpi(prime) +
 					to_mpi(ord) +
 					to_mpi(gen) +
 					to_mpi(val)
 			when PubKeyAlgo::Elgamal, PubKeyAlgo::Elgamal_E, PubKeyAlgo::Elgamal_ES
-				(_,prime,gen,val) = algvalues
+				(_, prime, gen, val) = algvalues
 				fprbody << to_mpi(prime) +
 					to_mpi(gen) +
 					to_mpi(val)
@@ -922,7 +904,7 @@ class PubKeyPacket < Packet
 			x = to_scalar(fprbody.length) ### X1
 			Digest::SHA1.hexdigest(
 				0x99.chr +  ### a.1
-				x[0,1] + x[-1,1] + ### X1 #to_scalar(fprbody.length, 2) + ### X2  ### a.2 and a.3
+				x[0, 1] + x[-1, 1] + ### X1 #to_scalar(fprbody.length, 2) + ### X2  ### a.2 and a.3
 				### X1 and X2 are equivalent if keys are limited to 64k
 				### FIXME s. Mail
 				fprbody); ### (b)-(f)
@@ -931,11 +913,11 @@ class PubKeyPacket < Packet
 		end
 	end
 
-	def keyid(long=false)
+	def keyid(long = false)
 		if long
-			fingerprint[-16,16]
+			fingerprint[-16, 16]
 		else
-			fingerprint[-8,8]
+			fingerprint[-8, 8]
 		end
 	end
 end
@@ -963,7 +945,7 @@ module Armor
 		crc = 0xb704ce
 		str.each_byte do |b|
 			#printf "#{crc} "
-			crc ^= b<<16
+			crc ^= b << 16
 			8.times do
 				crc <<= 1
 				crc ^= 0x1864cfb unless (crc & 0x1000000).zero?
@@ -999,7 +981,7 @@ module Armor
 	# return value:
 	# if not armored: nil
 	# if armored:
-	#	[typestring, headerhash, binarydatastring, checksumstring (3 chars)] 
+	#	[typestring, headerhash, binarydatastring, checksumstring (3 chars)]
 	def Armor.dearmor(str)
 		m = %r|^-----BEGIN PGP (.*)-----$[\n\r]+(?:^(.*: [^\n\r]*[\n\r]+)*$[\n\r]+)?^(.*)=([/+\d\w]{4})$[\n\r]+^-----END PGP \1-----$|m.match(str)
 		(m.nil? ? nil : [m[1], header(m[2]), debase64(m[3]), debase64(m[4])])
@@ -1015,13 +997,13 @@ public
 	def initialize(data)
 		# FIXME only look for *one* armor -- TODO: check for more
 		# XXX: armor deactivated since BufferedStream usage
-		
+
 		@ring = data
 
 		#check = Armor.dearmor(data)
 		#@armored = !check.nil?
 		#if @armored
-		#	@armortype, @armorheader, @ring = *check[0,3] 
+		#	@armortype, @armorheader, @ring = *check[0, 3]
 		#else
 		#	@armored = false
 		#	@armorheader = {}
@@ -1035,52 +1017,52 @@ public
 		ring = File.open(filename, 'r')
 		self.new(BufferedStream.new(ring))
 	end
-	
-	
+
+
 #	def change_packets #TODO later, first we handle read only
 #		each_packet(false) do |pkt|
 #			yield pkt
 #		end
 #	end
 
-	def each_packet(readonly=true)
-		pos=0
-		partial=false # partial stuff not yet tested!
+	def each_packet(readonly = true)
+		pos = 0
+		partial = false # partial stuff not yet tested!
 
 		while !@ring.eos(pos)
 			if (@ring[pos] >> 7).nonzero? # aka is_pkthdr (packet header)
 				bodylen = 0
 				
 				if ((@ring[pos] >> 6) & 1).zero? # aka is_old_ring_format?
-					partial=false
+					partial = false
 					type = (@ring[pos] & 0b111100) >> 2
 					lengthtype = (@ring[pos] & 0b11)
 					if lengthtype < 3
 						(1 << lengthtype).downto(1) do |len|
 							pos += 1
 							bodylen <<= 8
-							bodylen |= @ring[pos] 
+							bodylen |= @ring[pos]
 						end
 					else
 						raise 'OpenPGP Old ring format Length Type 3 not supported!'
 					end
-					pos+=1
+					pos += 1
 				else
-					type=@ring[pos] & 0b111111
-					bodylen, partial, pos = *packetlength(@ring, partial, pos+1)
+					type = @ring[pos] & 0b111111
+					bodylen, partial, pos = *packetlength(@ring, partial, pos + 1)
 				end
 			else
 				raise 'Invalid packet!'
 			end
 
-			ret = yield Packet.new(@ring[pos,bodylen], type), pos
+			ret = yield Packet.new(@ring[pos, bodylen], type), pos
 #			unless readonly
-#				@ring[pos,bodylen] = ret
+#				@ring[pos, bodylen] = ret
 #				# TODO
 #				# header aender! ;)
 #			end
 
-			# TODO nicht bei partial yielden -- ?
+			# TODO do not yield when partial?
 
 			pos += bodylen
 		end
