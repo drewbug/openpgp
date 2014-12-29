@@ -98,7 +98,7 @@ class BufferedStream
 					stillneeded(pos) do
 						nextbuf while pos - @pos >= @buffer.length and not @stream.eof?
 					end
-					return @buffer[pos - @pos]
+					return @buffer.getbyte(pos - @pos)
 				else
 					return self[pos..(pos + length - 1)]
 				end
@@ -110,14 +110,14 @@ class BufferedStream
 				r = @buffer[(pos.min - @pos)..(pos.max - @pos)]
 				return (r.nil? ? '' : r)
 			end
-		else # String
+			0
+		else # @stream.is_a? String
 			if length.nil?
-				@stream[pos]
+				@stream.getbyte(pos)
 			else
 				@stream[pos, length]
 			end
 		end
-		0
 	end
 end
 
@@ -132,11 +132,11 @@ def scalar(str)
 		when 0
 			0
 		when 1
-			str[0]
+			str.getbyte(0)
 		when 2
-			(str[0] << 8) | str[1]
+			(str.getbyte(0) << 8) | str.getbyte(1)
 		when 4
-			(str[0] << 24) | (str[1] << 16) | (str[2] << 8) | str[3]
+			(str.getbyte(0) << 24) | (str.getbyte(1) << 16) | (str.getbyte(2) << 8) | str.getbyte(3)
 		else # the following also works on the rest
 			ret = 0
 			str.each_byte do |b|
@@ -194,7 +194,7 @@ def to_mpi(num)
 	return '' if n.empty? # this must not occur, in fact.
 	l = (n.length - 1) * 8
 	i = 0
-	i += 1 while(n[0] >> i > 1)
+	i += 1 while (n.getbyte(0) >> i) > 1
 	to_scalar(l + i + 1, 2) + n
 end
 
@@ -222,11 +222,12 @@ end
 
 # the same, but without partial length
 def packetlength_without_partial(str, pos)
-	if str[pos] < 192
-		bodylen = str[pos]
+	byte = str.getbyte(pos)
+	if byte < 192
+		bodylen = byte
 		pos += 1
 	elsif str[pos] < 255
-		bodylen = ((str[pos] - 192) << 8) + str[pos + 1] + 192
+		bodylen = ((byte - 192) << 8) + str.getbyte(pos + 1) + 192
 		pos += 2
 	else # indirect: str[pos] == 255
 		bodylen = scalar(str[pos + 1, 4])
@@ -428,7 +429,7 @@ module SignaturePacket
 	def SignaturePacket.new(data)
 		#print "SignaturePacket.new: "
 		#p data.end(1).unpack('H*')
-		case data[0]
+		case data.getbyte(0)
 		when 2
 			SignatureV2Packet.new(data.end(1))
 		when 3
@@ -436,7 +437,7 @@ module SignaturePacket
 		when 4
 			SignatureV4Packet.new(data.end(1))
 		else
-			raise "Signature Version #{data[0]} != 2, 3 or 4 not supported!"
+			raise "Signature Version #{data.getbyte(0)} != 2, 3 or 4 not supported!"
 		end
 	end
 end
@@ -453,7 +454,7 @@ class SignatureV3Packet < Packet
 	end
 
 	def sigtype
-		@body[1]
+		@body.getbyte(1)
 	end
 
 	def ctime
@@ -465,11 +466,11 @@ class SignatureV3Packet < Packet
 	end
 
 	def pubkeyalgo
-		@body[14]
+		@body.getbyte(14)
 	end
 
 	def hashalgo
-		@body[15]
+		@body.getbyte(15)
 	end
 
 	def hash16 # the left 16 bits of signed hash value
@@ -498,15 +499,15 @@ class SignatureV4Packet < Packet
 	end
 
 	def sigtype
-		@body[0]
+		@body.getbyte(0)
 	end
 
 	def pubkeyalgo
-		@body[1]
+		@body.getbyte(1)
 	end
 
 	def hashalgo
-		@body[2]
+		@body.getbyte(2)
 	end
 
 	# length of all hashed subpackets
@@ -528,7 +529,7 @@ class SignatureV4Packet < Packet
 		end
 		while pos < upto
 			len, pos = *packetlength_without_partial(@body, pos)
-			type = @body[pos]
+			type = @body.getbyte(pos)
 			# len includes `type octet' :\
 			pos += 1
 			yield SigV4SubPacket.new(@body[pos, len - 1], type)
@@ -700,7 +701,7 @@ class UserAttributePacket < Packet
 
 		while pos < @body.length
 			len, partial, pos = *packetlength(@body, partial, pos)
-			type = @body[pos]
+			type = @body.getbyte(pos)
 			pos += 1
 			yield UserAttributeSubPacket.new(@body[pos, len], type)
 			pos += len
@@ -748,7 +749,7 @@ class UserAttributeSubPacketImage < UserAttributeSubPacket
 	end
 
 	def hdrlen
-		@body[0] | (@body[1] << 8)
+		@body.getbyte(0) | (@body.getbyte(1) << 8)
 	end
 
 	def initialize(data)
@@ -798,19 +799,20 @@ class PubKeyPacket < Packet
 
 	# checks if version is supported
 	def version
-		raise 'Invalid packet version!' unless @body[0].between?(2, 4)
-		@body[0]
+		version = @body.getbyte(0)
+		raise 'Invalid packet version!' unless version.between?(2, 4)
+		version
 	end
 
 	# two predicate versions, not checking for values \notin {2, 3, 4}
 	def version2?
-		@body[0] == 2
+		@body.getbyte(0) == 2
 	end
 	def version3?
-		@body[0] == 3
+		@body.getbyte(0) == 3
 	end
 	def version4?
-		@body[0] == 4
+		@body.getbyte(0) == 4
 	end
 
 	# creation time
@@ -833,9 +835,9 @@ class PubKeyPacket < Packet
 	def algorithm
 		case version
 		when 4
-			@body[5]
+			@body.getbyte(5)
 		when 2, 3
-			@body[7]
+			@body.getbyte(7)
 		end
 	end
 
@@ -899,7 +901,7 @@ class PubKeyPacket < Packet
 					to_mpi(gen) +
 					to_mpi(val)
 			else
-				raise :notimplemented
+				raise 'Not implemented'
 			end
 			x = to_scalar(fprbody.length) ### X1
 			Digest::SHA1.hexdigest(
@@ -1030,13 +1032,14 @@ public
 		partial = false # partial stuff not yet tested!
 
 		while !@ring.eos(pos)
-			if (@ring[pos] >> 7).nonzero? # aka is_pkthdr (packet header)
+			byte = @ring[pos]
+			if (byte >> 7).nonzero? # aka is_pkthdr (packet header)
 				bodylen = 0
-				
-				if ((@ring[pos] >> 6) & 1).zero? # aka is_old_ring_format?
+
+				if ((byte >> 6) & 1).zero? # aka is_old_ring_format?
 					partial = false
-					type = (@ring[pos] & 0b111100) >> 2
-					lengthtype = (@ring[pos] & 0b11)
+					type = (byte & 0b111100) >> 2
+					lengthtype = (byte & 0b11)
 					if lengthtype < 3
 						(1 << lengthtype).downto(1) do |len|
 							pos += 1
@@ -1048,7 +1051,7 @@ public
 					end
 					pos += 1
 				else
-					type = @ring[pos] & 0b111111
+					type = byte & 0b111111
 					bodylen, partial, pos = *packetlength(@ring, partial, pos + 1)
 				end
 			else
