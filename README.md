@@ -3,7 +3,7 @@ OpenPGP.rb: OpenPGP for Ruby
 
 This is a pure-Ruby implementation of the OpenPGP Message Format (RFC 4880).
 
-* <http://github.com/bendiken/openpgp>
+* <http://github.com/sbeyer/openpgp>
 
 ### About OpenPGP
 
@@ -33,7 +33,7 @@ Examples
 ### Decoding an ASCII-armored message
 
     require 'open-uri'
-    text = open('http://openpgp.rubyforge.org/pgp.txt').read
+    text = open('http://example.org/pgp.txt').read
 
     msg = OpenPGP::Message.parse(OpenPGP.dearmor(text))
 
@@ -51,11 +51,6 @@ Examples
       :passphrase    => 'secret passphrase',
     })
 
-Documentation
--------------
-
-* <http://openpgp.rubyforge.org/>
-
 Dependencies
 ------------
 
@@ -69,57 +64,45 @@ The recommended installation method is via [RubyGems](http://rubygems.org/).
 To install the latest official release of OpenPGP.rb, do:
 
     % [sudo] gem install openpgp             # Ruby 1.8.7+ or 1.9.x
-    % [sudo] gem install backports openpgp   # Ruby 1.8.1+
 
 Download
 --------
 
 To get a local working copy of the development repository, do:
 
-    % git clone git://github.com/bendiken/openpgp.git
+    % git clone git://github.com/sbeyer/openpgp.git
 
 Alternatively, you can download the latest development version as a tarball
 as follows:
 
-    % wget http://github.com/bendiken/openpgp/tarball/master
+    % wget http://github.com/sbeyer/openpgp/tarball/master
 
 Resources
 ---------
 
-* <http://openpgp.rubyforge.org/>
-* <http://github.com/bendiken/openpgp>
+* <http://github.com/sbeyer/openpgp>
 * <http://rubygems.org/gems/openpgp>
-* <http://rubyforge.org/projects/openpgp/>
 * <http://raa.ruby-lang.org/project/openpgp/>
 * <http://www.ohloh.net/p/openpgp>
 
-Authors
--------
+Authors/Contributors
+--------------------
 
-* [Arto Bendiken](mailto:arto.bendiken@gmail.com) - <http://ar.to/>
+The project was originally written by
+  [Arto Bendiken](mailto:arto.bendiken@gmail.com) <http://ar.to/>
 
-Contributors
-------------
+For a full list of contributors, see
+  <https://github.com/sbeyer/openpgp/graphs/contributors>
 
-* [Kévin Lacointe](mailto:kevinlacointe@gmail.com) - <http://github.com/klacointe>
-* [Stephen Paul Weber](mailto:singpolyma@singpolyma.net) - <https://singpolyma.net>
-
-Contributing
-------------
+Contributing to my branch
+-------------------------
 
 * Do your best to adhere to the existing coding conventions and idioms.
-* Don't use hard tabs, and don't leave trailing whitespace on any line.
 * Do document every method you add using [YARD][] annotations. Read the
   [tutorial][YARD-GS] or just look at the existing code for examples.
-* Don't touch the `.gemspec` or `VERSION` files. If you need to change them,
-  do so on your private branch only.
-* Do feel free to add yourself to the `CONTRIBUTORS` file and the
-  corresponding list in the the `README`. Alphabetical order applies.
-* Don't touch the `AUTHORS` file. If your contributions are significant
-  enough, be assured we will eventually add you in there.
-* Do note that in order for us to merge any non-trivial changes (as a rule
-  of thumb, additions larger than about 15 lines of code), we need an
-  explicit [public domain dedication][PDD] on record from you.
+* I assume that you dedicate your code changes to the public domain.
+  If this is not the case for code that got into my branch, please contact me
+  so that I can remove the code.
 
 License
 -------
@@ -129,4 +112,3 @@ information, see <http://unlicense.org/> or the accompanying UNLICENSE file.
 
 [YARD]:      http://yardoc.org/
 [YARD-GS]:   http://rubydoc.info/docs/yard/file/docs/GettingStarted.md
-[PDD]:       http://unlicense.org/#unlicensing-contributions
