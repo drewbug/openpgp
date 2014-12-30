@@ -137,17 +137,27 @@ module OpenPGP
     # @see http://tools.ietf.org/html/rfc4880#section-5.1
     # @see http://tools.ietf.org/html/rfc4880#section-13.1
     class AsymmetricSessionKey < Packet
-      attr_accessor :version, :key_id, :algorithm
+      attr_accessor :version, :key_id, :algorithm, :sess_key
 
       def self.parse_body(body, options = {})
         case version = body.read_byte
           when 3
-            self.new(:version => version, :key_id => body.read_number(8, 16), :algorithm => body.read_byte)
-            # TODO: read the encrypted session key.
+            packet = self.new(:version => version, :key_id => body.read_number(8, 16), :algorithm => body.read_byte, :sess_key => {})
+            packet.read_key_material(body)
+            packet
           else
             raise "Invalid OpenPGP public-key ESK packet version: #{version}"
         end
       end
+
+      def read_key_material(body)
+        case algorithm
+          when Algorithm::Asymmetric::ECDH
+            sess_key[:eph_pk] = body.read_mpi
+          else raise "Unsupported Asymmetric session key algo: #{algorithm}"
+        end
+      end
+
     end
 
     ##
@@ -325,6 +335,8 @@ module OpenPGP
               @fields = [body.read_mpi]
             when Algorithm::Asymmetric::DSA
               @fields = [body.read_mpi, body.read_mpi]
+            when Algorithm::Asymmetric::ECDSA
+              @fields = [body.read_mpi]
             else
               raise "Unknown OpenPGP signature packet public-key algorithm: #{key_algorithm}"
           end
@@ -574,7 +586,7 @@ module OpenPGP
                               :algorithm => body.read_byte,
                               :key => {},
                               :size => body.size)
-            packet.read_key_material(body)
+            packet.read_public_key_material(body)
             packet
           else
             raise "Invalid OpenPGP public-key packet version: #{version}"
@@ -583,8 +595,26 @@ module OpenPGP
 
       ##
       # @see http://tools.ietf.org/html/rfc4880#section-5.5.2
-      def read_key_material(body)
-        key_fields.each { |field| key[field] = body.read_mpi }
+      def read_public_key_material(body)
+        key_fields.each do |field|
+          # ECC OID fields have special format
+          # http://tools.ietf.org/html/rfc6637#section-9
+          key[field] = case field
+            when :oid
+              # first byte is size of oid (in octets)
+              size = body.read_byte
+              body.read_bytes(size)
+            when :kdf
+              size = body.read_byte # should always be 3?
+              val = body.read_byte # is always 1
+              kdf = {}
+              kdf[:hash_func] = body.read_byte
+              kdf[:sym_func] = body.read_byte
+              kdf
+            else
+              body.read_mpi
+          end
+        end
         @key_id = fingerprint[-8..-1]
       end
 
@@ -593,6 +623,8 @@ module OpenPGP
           when Algorithm::Asymmetric::RSA   then [:n, :e]
           when Algorithm::Asymmetric::ELG_E then [:p, :g, :y]
           when Algorithm::Asymmetric::DSA   then [:p, :q, :g, :y]
+          when Algorithm::Asymmetric::ECDSA then [:oid, :pk]
+          when Algorithm::Asymmetric::ECDH  then [:oid, :pk, :kdf]
           else raise "Unknown OpenPGP key algorithm: #{algorithm}"
         end
       end
@@ -603,7 +635,20 @@ module OpenPGP
             [key[:n], key[:e]].join
           when 4
             material = key_fields.map do |key_field|
-              [[OpenPGP.bitlength(key[key_field])].pack('n'), key[key_field]]
+              case key_field
+              when :oid
+                [[key[:oid].length].pack("C"), # byte size of oid
+                 key[:oid]]
+              when :kdf
+                # kdf has special processing requirements
+                [0x03.chr, # size (3)
+                 0x01.chr, # value (1)
+                 [key[key_field][:hash_func]].pack("C"), # hash_func
+                 [key[key_field][:sym_func]].pack("C")] # sym_func
+              else
+                [[OpenPGP.bitlength(key[key_field])].pack('n'),
+                 key[key_field]]
+              end
             end.flatten.join
             [0x99.chr, [material.length + 6].pack('n'), version.chr, [timestamp].pack('N'), algorithm.chr, material]
         end
@@ -727,6 +772,40 @@ module OpenPGP
           }].pack('n')
         end
       end
+=begin
+      attr_accessor :priv
+
+      def self.parse_body(body, options = {})
+        packet = super(body)
+        packet.priv = {}
+        packet.read_private_key_material(body)
+        packet
+      end
+
+      def read_private_key_material(body)
+        @priv[:type] = body.read_byte
+        case @priv[:type]
+        # is secret part encrypted?
+        when 254 || 255
+          @priv[:sym_enc_alg] = body.read_byte
+          # next is s2k identifier, length of which is prescribed by type
+          @priv[:s2k] = S2K.parse(body)
+          @priv[:iv] = case @priv[:sym_enc_alg]
+            when Algorithm::Symmetric::AES128 then body.read_bytes(128 / 8)
+            when Algorithm::Symmetric::CAST5  then body.read_bytes(128 / 8)
+            when Algorithm::Symmetric::AES192 then body.read_bytes(192 / 8)
+            when Algorithm::Symmetric::AES256 then body.read_bytes(256 / 8)
+            else
+              raise "s2k encryption algorithm not supported"
+          end
+        end
+
+        @priv[:data] = body.read_mpi
+        @priv[:check] = case @priv[:type]
+          when 254 then body.read_bytes(20)
+        end
+      end
+=end
     end
 
     ##
@@ -787,6 +866,23 @@ module OpenPGP
       def each(&cb)
         @data.each &cb
       end
+=begin
+      attr_accessor :algorithm, :compressed, :decompressed
+      def self.parse_body(body, options = {})
+        packet = self.new(:algorithm => body.read_byte, :compressed => body.read_bytes(body.length))
+        packet.decompressContent()
+        packet
+      end
+
+      def decompressContent
+        case self.algorithm
+        when Algorithm::Compression::ZLIB
+          @decompressed = Zlib::Inflate.inflate(@compressed)
+        else
+          raise "Compression algorithm not supported"
+        end
+      end
+=end
     end
 
     ##
@@ -942,12 +1038,14 @@ module OpenPGP
     #
     # @see http://tools.ietf.org/html/rfc4880#section-5.13
     class IntegrityProtectedData < Packet
-      attr_accessor :version
+      attr_accessor :version, :ciphertext
 
       def self.parse_body(body, options = {})
         case version = body.read_byte
           when 1
-            self.new(:version => version) # TODO: read the encrypted data.
+            packet = self.new(:version => version) # TODO: read the encrypted data.
+            packet.ciphertext = body.read_bytes(body.length)
+            packet
           else
             raise "Invalid OpenPGP integrity-protected data packet version: #{version}"
         end

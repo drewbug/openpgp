@@ -230,23 +230,23 @@ module OpenPGP
 
       protected
 
-        EXPBIAS = 6
+      EXPBIAS = 6
 
-        ##
-        # @param  [Integer] iterations
-        # @return [Integer]
-        def encode_count(iterations)
-          case iterations
-            when 0..1024           then 0
-            when 65011712..(1.0/0) then 255
-            else
-              count1 = iterations >> 6
-              count2 = (count2 || 0) + 1 while count1 >= 32 && count1 >>= 1
-              result = (count2 << 4) | (count1 - 16)
-              result += 1 if decode_count(result) < iterations
-              result
-          end
+      ##
+      # @param  [Integer] iterations
+      # @return [Integer]
+      def encode_count(iterations)
+        case iterations
+          when 0..1024           then 0
+          when 65011712..(1.0/0) then 255
+          else
+            count1 = iterations >> 6
+            count2 = (count2 || 0) + 1 while count1 >= 32 && count1 >>= 1
+            result = (count2 << 4) | (count1 - 16)
+            result += 1 if decode_count(result) < iterations
+            result
         end
+      end
     end
 
     DEFAULT = Iterated
