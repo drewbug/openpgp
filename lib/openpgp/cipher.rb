@@ -48,8 +48,10 @@ module OpenPGP
     # @param  [Hash{Symbol => Object}] options
     def initialize(key, options = {})
       @key = case key
-        when S2K then key.to_key(key_size)
-        else S2K::Simple.new(key).to_key(key_size)
+      when S2K
+        key.to_key(key_size)
+      else
+        S2K::Simple.new(key).to_key(key_size)
       end
       @options = options
     end

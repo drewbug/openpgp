@@ -14,7 +14,9 @@ module OpenPGP
       # @raise  [LoadError]
       def self.install!
         load!
-        [Random, Digest].each { |mod| install_extensions! mod }
+        [Random, Digest].each do |mod|
+          install_extensions! mod
+        end
       end
 
       ##
@@ -38,9 +40,10 @@ module OpenPGP
           return nil unless @key
           keyid.upcase! if keyid
           if @key.is_a?(Enumerable) # Like an OpenPGP::Message
-            @key.select {|p| p.is_a?(OpenPGP::Packet::PublicKey) && (!keyid || \
-              p.fingerprint[keyid.length*-1,keyid.length].upcase == keyid)
-            }.first
+            @key.select do |p|
+              p.is_a?(OpenPGP::Packet::PublicKey) && \
+               (!keyid || p.fingerprint[keyid.length*-1, keyid.length].upcase == keyid)
+            end.first
           end || @key
         end
 
@@ -70,9 +73,9 @@ module OpenPGP
           k = k.rsa_key(signature_packet.issuer)
           return nil unless k && signature_packet.key_algorithm_name == 'RSA'
 
-          return m.verify({'RSA' => {signature_packet.hash_algorithm_name => lambda {|m,s|
+          return m.verify({'RSA' => {signature_packet.hash_algorithm_name => lambda do |m,s|
             k.verify(signature_packet.hash_algorithm_name, s.first, m)
-          }}})
+          end}})
         end
 
         ##
@@ -115,7 +118,9 @@ module OpenPGP
             :hash_algorithm => OpenPGP::Digest::for(hash).to_i)
           sig.hashed_subpackets << OpenPGP::Packet::Signature::Issuer.new(keyid)
           sig.hashed_subpackets << OpenPGP::Packet::Signature::SignatureCreationTime.new(Time.now.to_i)
-          sig.sign_data(m, {'RSA' => {hash => lambda {|m| k.sign(hash, m)}}})
+          sig.sign_data(m, {'RSA' => {hash => lambda do |m|
+            k.sign(hash, m)
+          end}})
           OpenPGP::Message.new([sig, m])
         end
 
@@ -146,7 +151,9 @@ module OpenPGP
             sig.unhashed_subpackets << OpenPGP::Packet::Signature::Issuer.new(keyid)
             packet << sig
           end
-          sig.sign_data(packet, {'RSA' => {hash => lambda {|m| rsa_key.sign(hash, m)}}})
+          sig.sign_data(packet, {'RSA' => {hash => lambda do |m|
+            rsa_key.sign(hash, m)
+          end}})
 
           packet
         end
@@ -166,19 +173,19 @@ module OpenPGP
 
           # Create blank key and fill the fields
           key = ::OpenSSL::PKey::RSA.new
-          packet.each {|k,v|
+          packet.each do |k,v|
             next if k == :u # OpenSSL doesn't call it that
             if v.is_a?(Numeric)
               v = ::OpenSSL::BN.new(v.to_s)
             elsif !(v.is_a?(::OpenSSL::BN))
               # Convert the byte string to an OpenSSL::BN
               v = v.reverse.enum_for(:each_char).enum_for(:each_with_index) \
-                .inject(::OpenSSL::BN.new('0')) {|c, (b,i)|
+                .inject(::OpenSSL::BN.new('0')) do |c, (b,i)|
                   c + (b.force_encoding('binary').ord << i*8)
-                }
+                end
             end
             key.send("#{k}=".intern, v)
-          }
+          end
           key
         end
       end

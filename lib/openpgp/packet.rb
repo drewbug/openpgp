@@ -103,7 +103,9 @@ module OpenPGP
     ##
     # @param  [Hash{Symbol => Object}] options
     def initialize(options = {}, &block)
-      options.each { |k, v| send("#{k}=", v) }
+      options.each do |k, v|
+        send("#{k}=", v)
+      end
       block.call(self) if block_given?
     end
 
@@ -128,7 +130,9 @@ module OpenPGP
     ##
     # @return [String]
     def body
-      respond_to?(:write_body) ? Buffer.write { |buffer| write_body(buffer) } : ""
+      respond_to?(:write_body) ? Buffer.write do |buffer|
+        write_body(buffer)
+      end : ""
     end
 
     ##
@@ -222,9 +226,9 @@ module OpenPGP
       end
 
       def issuer
-        packet = (hashed_subpackets + unhashed_subpackets).select {|packet|
+        packet = (hashed_subpackets + unhashed_subpackets).select do |packet|
           packet.is_a?(OpenPGP::Packet::Signature::Issuer)
-        }.first
+        end.first
         if packet
           packet.data
         else
@@ -239,21 +243,25 @@ module OpenPGP
       def body(trailer=false)
         body = 4.chr + type.chr + key_algorithm.chr + hash_algorithm.chr
 
-        sub = hashed_subpackets.inject('') {|c,p| c + p.to_s}
+        sub = hashed_subpackets.inject('') do |c,p|
+          c + p.to_s
+        end
         body << [sub.length].pack('n') + sub
 
         # The trailer is just the top of the body plus some crap
         return body + 4.chr + 0xff.chr + [body.length].pack('N') if trailer
 
-        sub = unhashed_subpackets.inject('') {|c,p| c + p.to_s}
+        sub = unhashed_subpackets.inject('') do |c,p|
+          c + p.to_s
+        end
         body << [sub.length].pack('n') + sub
 
         body << [hash_head].pack('n')
 
-        fields.each {|data|
+        fields.each do |data|
           body << [OpenPGP.bitlength(data)].pack('n')
           body << data
-        }
+        end
         body
       end
 
@@ -319,10 +327,10 @@ module OpenPGP
           tag = buf.read_byte.ord
           critical = (tag & 0x80) != 0
           tag &= 0x7F
-          self.class.const_get(self.class.constants.select {|t|
+          self.class.const_get(self.class.constants.select do |t|
             self.class.const_get(t).const_defined?(:TAG) && \
             self.class.const_get(t)::TAG == tag
-          }.first).parse_body(Buffer.new(buf.read(length-1)), :tag => tag)
+          end.first).parse_body(Buffer.new(buf.read(length-1)), :tag => tag)
         rescue Exception
           nil # Parse error, return no subpacket
         end
@@ -498,7 +506,9 @@ module OpenPGP
           end
 
           def body
-            flags.map {|f| f.chr}.join
+            flags.map do |f|
+              f.chr
+            end.join
           end
         end
         class SignersUserID < Subpacket
@@ -721,7 +731,9 @@ module OpenPGP
         else
           data[:data] = body.read # Rest of input is MPIs and checksum
         end
-        data.each {|k,v| key.send("#{k}=", v) }
+        data.each do |k,v|
+          key.send("#{k}=", v)
+        end
         key.key_from_data
         key
       end
@@ -729,9 +741,9 @@ module OpenPGP
       def key_from_data
         return nil unless data # Not decrypted yet
         body = Buffer.new(data)
-        secret_key_fields.each {|mpi|
+        secret_key_fields.each do |mpi|
           self.key[mpi] = body.read_mpi
-        }
+        end
         # TODO: Validate checksum?
         if s2k_useage == 254 # 20 octet sha1 hash
           @private_hash = body.read_bytes(20)
@@ -760,16 +772,18 @@ module OpenPGP
         end.to_s + if s2k_useage.to_i > 0
           encrypted_data
         else
-          secret_material = secret_key_fields.map {|f| [OpenPGP.bitlength(key[f].to_s)].pack('n') + key[f].to_s}.join
+          secret_material = secret_key_fields.map do |f|
+            [OpenPGP.bitlength(key[f].to_s)].pack('n') + key[f].to_s
+          end.join
         end + \
         if s2k_useage == 254 # SHA1 checksum
           # TODO
           "\0"*20
         else # 2-octet checksum
           # TODO, this design will not work for encrypted keys
-          [secret_material.split(//).inject(0) {|chk, c|
+          [secret_material.split(//).inject(0) do |chk, c|
             chk = (chk + c.ord) % 65536
-          }].pack('n')
+          end].pack('n')
         end
       end
 =begin

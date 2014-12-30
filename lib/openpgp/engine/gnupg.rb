@@ -232,7 +232,9 @@ module OpenPGP class Engine
       def cmdline(command, options = {})
         command = [command].flatten
         cmdline = [where]
-        cmdline += @options.merge(options).map { |k, v| !v ? nil : "#{option(k)} #{v == true ? '' : v.to_s}".rstrip }.compact
+        cmdline += @options.merge(options).map do |k, v|
+          !v ? nil : "#{option(k)} #{v == true ? '' : v.to_s}".rstrip
+        end.compact
         cmdline << option(command.shift)
         cmdline += command
         cmdline.flatten.join(' ').strip

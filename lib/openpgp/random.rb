@@ -8,7 +8,9 @@ module OpenPGP
     # @return [Integer]
     def self.number(bits = 32, options = {})
       octets = bytes((bits / 8.0).ceil).unpack('C*')
-      number = octets.inject { |number, octet| number = (number << 8) | octet }
+      number = octets.inject do |number, octet|
+        number = (number << 8) | octet
+      end
       number & ((1 << bits) - 1)
     end
 
@@ -36,7 +38,9 @@ module OpenPGP
     # @param  [Integer] count
     # @return [String]
     def self.bytes(count, &block)
-      octets = File.open('/dev/random', 'r') {|f| f.read(count) } # FIXME
+      octets = File.open('/dev/random', 'r') do |f|
+        f.read(count) # FIXME
+      end
       block_given? ? octets.each_byte(&block) : octets
     end
   end

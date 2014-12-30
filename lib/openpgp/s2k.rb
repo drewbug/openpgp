@@ -34,8 +34,9 @@ module OpenPGP
     # @param  [Hash{Symbol => Object}] options
     def initialize(passphrase = nil, options = {}, &block)
       @passphrase = passphrase.to_s
-      options.each { |k, v| instance_variable_set("@#{k}", v) }
-
+      options.each do |k, v|
+        instance_variable_set("@#{k}", v)
+      end
       block.call(self) if block_given?
     end
 
@@ -62,7 +63,9 @@ module OpenPGP
     ##
     # @return [String]
     def to_s
-      Buffer.write { |buffer| write(buffer) }
+      Buffer.write do |buffer|
+        write(buffer)
+      end
     end
 
     ##

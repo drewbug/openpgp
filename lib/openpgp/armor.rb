@@ -56,7 +56,9 @@ module OpenPGP
         text << "Version: #{options[:version]}\n" if options[:version]
         text << "Comment: #{options[:comment]}\n" if options[:comment]
         if options[:headers]
-          options[:headers].each { |key, value| text << "#{key}: #{value}\n" }
+          options[:headers].each do |key, value|
+            text << "#{key}: #{value}\n"
+          end
         end
         text << "\n" << encode64(data, options[:line_length])
         text << "="  << encode64([OpenPGP.crc24(data)].pack('N')[1, 3])

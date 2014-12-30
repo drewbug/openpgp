@@ -156,7 +156,9 @@ module OpenPGP module Client
     # @return [void]
     def verify_files(*files)
       options[:multifile] = true
-      files.each { |file| verify(file) }
+      files.each do |file|
+        verify(file)
+      end
     end
 
     ##
@@ -166,7 +168,9 @@ module OpenPGP module Client
     # @return [void]
     def encrypt_files(*files)
       options[:multifile] = true
-      files.each { |file| encrypt(file) }
+      files.each do |file|
+        encrypt(file)
+      end
     end
 
     ##
@@ -176,7 +180,9 @@ module OpenPGP module Client
     # @return [void]
     def decrypt_files(*files)
       options[:multifile] = true
-      files.each { |file| decrypt(file) }
+      files.each do |file|
+        decrypt(file)
+      end
     end
 
     ##

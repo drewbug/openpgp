@@ -27,9 +27,14 @@ module OpenPGP
           msg << Packet::EncryptedData.new do |packet|
             plaintext = self.write do |msg|
               case data
-                when Message then data.each { |packet| msg << packet }
-                when Packet  then msg << data
-                else msg << Packet::LiteralData.new(:data => data)
+              when Message
+                data.each do |packet|
+                  msg << packet
+                end
+              when Packet
+                msg << data
+              else
+                msg << Packet::LiteralData.new(:data => data)
               end
             end
             packet.data = cipher.encrypt(plaintext)
@@ -91,7 +96,7 @@ module OpenPGP
       msg = msg.first while msg.first.is_a?(OpenPGP::Packet::CompressedData)
       signature_packet = data_packet = nil
       i = 0
-      msg.each { |packet|
+      msg.each do |packet|
         if packet.is_a?(OpenPGP::Packet::Signature)
           signature_packet = packet if i == index
           i += 1
@@ -99,7 +104,7 @@ module OpenPGP
           data_packet = packet
         end
         break if signature_packet && data_packet
-      }
+      end
       [signature_packet, data_packet]
     end
 
@@ -145,7 +150,9 @@ module OpenPGP
     ##
     # @return [Integer]
     def size
-      inject(0) { |sum, packet| sum + packet.size }
+      inject(0) do |sum, packet|
+        sum + packet.size
+      end
     end
 
     ##
